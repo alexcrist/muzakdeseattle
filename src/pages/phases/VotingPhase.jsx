@@ -9,8 +9,6 @@ export default function VotingPhase({ round, player, settings }) {
   const [myVotes, setMyVotes] = useState({})     // { songId: points }
   const [myComments, setMyComments] = useState({}) // { songId: draft string }
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [commentSaving, setCommentSaving] = useState({})
   const [voterCount, setVoterCount] = useState(0)
   const [totalPlayers, setTotalPlayers] = useState(0)
@@ -84,36 +82,37 @@ export default function VotingPhase({ round, player, settings }) {
 
   const pointsRemaining = pointsTotal - pointsUsed
 
-  function handleVoteChange(songId, value) {
-    const num = Math.max(0, parseInt(value) || 0)
-    const currentForOthers = Object.entries(myVotes)
+  async function adjustVote(songId, delta) {
+    const current = parseInt(myVotes[songId]) || 0
+    const usedByOthers = Object.entries(myVotes)
       .filter(([id]) => id !== songId)
       .reduce((sum, [, v]) => sum + (parseInt(v) || 0), 0)
+    const max = pointsTotal - usedByOthers
+    const next = Math.max(0, Math.min(current + delta, max))
+    if (next === current) return
 
-    const max = pointsTotal - currentForOthers
-    setMyVotes(v => ({ ...v, [songId]: Math.min(num, max) }))
-    setSaved(false)
-  }
+    setMyVotes(v => ({ ...v, [songId]: next }))
 
-  async function handleSaveVotes() {
-    setSaving(true)
-    const upserts = Object.entries(myVotes)
-      .filter(([, pts]) => (parseInt(pts) || 0) > 0)
-      .map(([song_id, points]) => ({
-        round_id: round.id,
-        song_id,
-        voter_player_id: player.id,
-        points: parseInt(points),
-      }))
-
-    // Delete existing votes first, then insert (simpler than true upsert with compound keys)
-    await supabase.from('votes').delete().eq('round_id', round.id).eq('voter_player_id', player.id)
-    if (upserts.length > 0) {
-      await supabase.from('votes').insert(upserts)
+    if (next === 0) {
+      await supabase
+        .from('votes')
+        .delete()
+        .eq('round_id', round.id)
+        .eq('voter_player_id', player.id)
+        .eq('song_id', songId)
+    } else {
+      await supabase
+        .from('votes')
+        .upsert(
+          {
+            round_id: round.id,
+            song_id: songId,
+            voter_player_id: player.id,
+            points: next,
+          },
+          { onConflict: 'song_id,voter_player_id' }
+        )
     }
-
-    setSaving(false)
-    setSaved(true)
   }
 
   async function handleComment(songId) {
@@ -179,13 +178,6 @@ export default function VotingPhase({ round, player, settings }) {
         <span className={`points-counter ${pointsRemaining === 0 ? 'depleted' : ''}`}>
           {pointsRemaining === 0 ? '✓ All points allocated' : `${pointsRemaining} points remaining`}
         </span>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={handleSaveVotes}
-          disabled={saving}
-        >
-          {saving ? 'Saving...' : saved ? '✓ Votes saved' : 'Save Votes'}
-        </button>
       </div>
 
       {/* Song list */}
@@ -207,6 +199,17 @@ export default function VotingPhase({ round, player, settings }) {
                   {song.album && <span className="song-album">{song.album}</span>}
                   {song.link && <a href={song.link} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem' }}>🔗</a>}
                 </div>
+                <div style={{ marginTop: '0.4rem' }}>
+                  <a
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${song.artist} ${song.title}`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-ghost btn-sm"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    ▶ YouTube
+                  </a>
+                </div>
                 {/* Submitter note - visible during voting */}
                 {song.submitter_note && (
                   <div className="submitter-note" style={{ marginTop: '0.5rem' }}>{song.submitter_note}</div>
@@ -214,22 +217,43 @@ export default function VotingPhase({ round, player, settings }) {
               </div>
             </div>
 
-            {/* Vote input */}
+            {/* Vote stepper */}
             <div className="vote-row">
               <label style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text3)', marginBottom: 0, display: 'inline' }}>
                 Points:
               </label>
-              <input
-                type="number"
-                className="vote-input"
-                min="0"
-                max={pointsTotal}
-                value={isOwn ? '' : (myVotes[song.id] || '')}
-                disabled={isOwn}
-                placeholder={isOwn ? '—' : '0'}
-                onChange={e => handleVoteChange(song.id, e.target.value)}
-              />
-              {isOwn && <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>You can't vote for yourself</span>}
+              {isOwn ? (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>You can't vote for yourself</span>
+              ) : (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => adjustVote(song.id, -1)}
+                    disabled={(myVotes[song.id] || 0) <= 0}
+                    aria-label="Remove a point"
+                    style={{ minWidth: '2.2rem', justifyContent: 'center' }}
+                  >
+                    −
+                  </button>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '1.1rem',
+                    minWidth: '1.5rem',
+                    textAlign: 'center',
+                  }}>
+                    {myVotes[song.id] || 0}
+                  </span>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => adjustVote(song.id, 1)}
+                    disabled={pointsRemaining <= 0}
+                    aria-label="Add a point"
+                    style={{ minWidth: '2.2rem', justifyContent: 'center' }}
+                  >
+                    +
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Comments */}
@@ -272,17 +296,6 @@ export default function VotingPhase({ round, player, settings }) {
         )
       })}
 
-      {/* Save votes sticky bottom */}
-      <div style={{ position: 'sticky', bottom: '70px', background: 'rgba(15,14,12,0.9)', backdropFilter: 'blur(8px)', padding: '0.75rem 0', marginTop: '1rem', borderTop: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <span className={`points-counter ${pointsRemaining === 0 ? 'depleted' : ''}`}>
-            {pointsRemaining === 0 ? '✓ All points allocated' : `${pointsRemaining} points remaining`}
-          </span>
-          <button className="btn btn-primary" onClick={handleSaveVotes} disabled={saving}>
-            {saving ? 'Saving...' : saved ? '✓ Saved — update anytime' : 'Save Votes'}
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

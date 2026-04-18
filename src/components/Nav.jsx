@@ -11,7 +11,7 @@ export default function Nav() {
     setMenuOpen(false)
   }
 
-  const isMenu = ['/archive', '/leaderboard', '/settings'].includes(location.pathname)
+  const isMenu = ['/archive', '/history', '/leaderboard', '/settings'].includes(location.pathname)
 
   return (
     <>
@@ -29,6 +29,9 @@ export default function Nav() {
           </button>
           <button className="menu-dropdown-item" onClick={() => go('/archive')}>
             📀 Song Archive
+          </button>
+          <button className="menu-dropdown-item" onClick={() => go('/history')}>
+            🗂️ Round History
           </button>
           <button className="menu-dropdown-item" onClick={() => go('/leaderboard')}>
             🏆 Leaderboard

@@ -10,6 +10,7 @@ import JoinScreen from './pages/JoinScreen.jsx'
 import HomePage from './pages/HomePage.jsx'
 import QueuePage from './pages/QueuePage.jsx'
 import ArchivePage from './pages/ArchivePage.jsx'
+import RoundHistoryPage from './pages/RoundHistoryPage.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import PlayerListPage from './pages/PlayerListPage.jsx'
@@ -84,6 +85,7 @@ export default function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/queue" element={<QueuePage />} />
               <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/history" element={<RoundHistoryPage />} />
               <Route path="/leaderboard" element={<LeaderboardPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/players" element={<PlayerListPage />} />
