@@ -20,7 +20,7 @@ export default function PlayerListPage() {
     // Get all songs to count rounds submitted per player
     const { data: allSongs } = await supabase
       .from('songs')
-      .select('player_id, round_id')
+      .select('id, player_id, round_id')
 
     // Get completed rounds to count how many rounds exist
     const { data: completedRounds } = await supabase
@@ -39,7 +39,7 @@ export default function PlayerListPage() {
     // Get votes received per player (points earned)
     const { data: allVotes } = await supabase
       .from('votes')
-      .select('song_id, points')
+      .select('song_id, points, voter_player_id, round_id')
 
     // Map song_id → player_id
     const songOwnerMap = {}
@@ -51,6 +51,7 @@ export default function PlayerListPage() {
     const roundsSubmitted = {}
     const pointsEarned = {}
     const activeRoundSubmitters = new Set()
+    const activeRoundVoters = new Set()
 
     for (const s of allSongs || []) {
       roundsSubmitted[s.player_id] = (roundsSubmitted[s.player_id] || 0) + 1
@@ -62,6 +63,9 @@ export default function PlayerListPage() {
     for (const v of allVotes || []) {
       const owner = songOwnerMap[v.song_id]
       if (owner) pointsEarned[owner] = (pointsEarned[owner] || 0) + v.points
+      if (activeRound && v.round_id === activeRound.id) {
+        activeRoundVoters.add(v.voter_player_id)
+      }
     }
 
     const enriched = allPlayers.map(p => ({
@@ -69,6 +73,7 @@ export default function PlayerListPage() {
       rounds_submitted: roundsSubmitted[p.id] || 0,
       points_earned: pointsEarned[p.id] || 0,
       submitted_this_round: activeRoundSubmitters.has(p.id),
+      voted_this_round: activeRoundVoters.has(p.id),
       completed_rounds: completedRounds?.length || 0,
       active_round: activeRound || null,
     }))
@@ -189,6 +194,11 @@ function PlayerRow({ player, isCurrentUser, toggling, onToggle }) {
             {player.active_round && (
               <span style={{ fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: player.submitted_this_round ? 'var(--success)' : 'var(--accent2)' }}>
                 {player.submitted_this_round ? '✓ submitted this round' : '✗ not submitted yet'}
+              </span>
+            )}
+            {player.active_round?.status === 'voting' && (
+              <span style={{ fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: player.voted_this_round ? 'var(--success)' : 'var(--accent2)' }}>
+                {player.voted_this_round ? '✓ voted this round' : '✗ not voted yet'}
               </span>
             )}
           </div>
