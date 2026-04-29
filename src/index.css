@@ -500,6 +500,352 @@ label {
   font-weight: 500;
 }
 
+.lb-row.is-champion {
+  background: linear-gradient(90deg, rgba(232, 197, 71, 0.18), rgba(232, 197, 71, 0.05) 60%, transparent);
+  position: relative;
+}
+.lb-row.is-champion::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #fff4c4, var(--accent), var(--accent2));
+  box-shadow: 0 0 12px rgba(232, 197, 71, 0.7);
+}
+.lb-row.is-champion .lb-name { color: var(--accent); }
+.lb-row.is-champion .lb-points {
+  font-size: 1.25rem;
+  text-shadow: 0 0 12px rgba(232, 197, 71, 0.5);
+}
+
+/* ── Champion hero (maximum swag) ── */
+@keyframes champ-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+@keyframes champ-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 22px rgba(232, 197, 71, 0.35),
+      0 0 60px rgba(232, 197, 71, 0.18),
+      0 0 120px rgba(232, 124, 71, 0.10),
+      inset 0 0 30px rgba(232, 197, 71, 0.10);
+  }
+  50% {
+    box-shadow:
+      0 0 50px rgba(232, 197, 71, 0.80),
+      0 0 110px rgba(232, 197, 71, 0.40),
+      0 0 180px rgba(232, 124, 71, 0.25),
+      inset 0 0 60px rgba(232, 197, 71, 0.22);
+  }
+}
+@keyframes champ-spin       { to { transform: rotate(360deg); } }
+@keyframes champ-spin-rev   { to { transform: rotate(-360deg); } }
+@keyframes champ-marquee    { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes champ-underline  {
+  0%, 100% { background-position: 0% 50%;   opacity: 0.85; }
+  50%      { background-position: 200% 50%; opacity: 1;    }
+}
+@keyframes champ-stars {
+  0%, 100% { transform: scale(1);    text-shadow: 0 0 8px  rgba(232, 197, 71, 0.6); }
+  50%      { transform: scale(1.12); text-shadow: 0 0 18px rgba(232, 197, 71, 1), 0 0 30px rgba(232, 197, 71, 0.5); }
+}
+@keyframes champ-foil {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 200% 50%; }
+}
+@keyframes champ-bounce {
+  0%, 100% { transform: translateY(0)    rotate(-4deg) scale(1); }
+  50%      { transform: translateY(-10px) rotate(4deg)  scale(1.06); }
+}
+@keyframes champ-pulse-num {
+  0%, 100% {
+    text-shadow:
+      0 0 10px rgba(232, 197, 71, 0.5),
+      0 0 20px rgba(232, 197, 71, 0.25);
+  }
+  50% {
+    text-shadow:
+      0 0 22px rgba(232, 197, 71, 0.95),
+      0 0 44px rgba(232, 197, 71, 0.55),
+      0 0 70px rgba(232, 197, 71, 0.35);
+  }
+}
+@keyframes champ-sparkle {
+  0%   { transform: translate(0, 0)     rotate(0deg)   scale(0.8); opacity: 0.35; }
+  50%  { transform: translate(8px, -14px) rotate(180deg) scale(1.4); opacity: 1;   }
+  100% { transform: translate(0, 0)     rotate(360deg) scale(0.8); opacity: 0.35; }
+}
+
+.champion-hero {
+  position: relative;
+  text-align: center;
+  padding: 2rem 1.5rem 0;
+  margin-bottom: 1.5rem;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--accent);
+  background:
+    radial-gradient(ellipse at top, rgba(232, 197, 71, 0.22), transparent 65%),
+    linear-gradient(135deg, #2a2200 0%, #1a1500 25%, #3a2e00 50%, #1a1500 75%, #2a2200 100%);
+  background-size: 100% 100%, 300% 300%;
+  animation: champ-shimmer 7s ease-in-out infinite, champ-glow 3s ease-in-out infinite;
+  overflow: hidden;
+}
+
+/* Rotating light rays behind everything */
+.champion-rays {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 200%;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    transparent     0deg,
+    rgba(232, 197, 71, 0.18) 6deg,
+    transparent     14deg,
+    transparent     30deg,
+    rgba(232, 197, 71, 0.10) 36deg,
+    transparent     44deg,
+    transparent     60deg,
+    rgba(232, 124, 71, 0.14) 66deg,
+    transparent     74deg,
+    transparent     120deg,
+    rgba(232, 197, 71, 0.16) 126deg,
+    transparent     134deg,
+    transparent     180deg,
+    rgba(232, 197, 71, 0.12) 186deg,
+    transparent     194deg,
+    transparent     240deg,
+    rgba(232, 124, 71, 0.14) 246deg,
+    transparent     254deg,
+    transparent     300deg,
+    rgba(232, 197, 71, 0.16) 306deg,
+    transparent     314deg,
+    transparent     360deg
+  );
+  mask: radial-gradient(circle, black 0%, black 30%, transparent 70%);
+  -webkit-mask: radial-gradient(circle, black 0%, black 30%, transparent 70%);
+  animation: champ-spin 18s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.champion-label {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.32em;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 0 14px rgba(232, 197, 71, 0.5);
+}
+
+.champion-medal-wrap {
+  position: relative;
+  display: inline-block;
+  width: 7rem;
+  height: 7rem;
+  margin: 0.2rem auto 0.3rem;
+  z-index: 2;
+}
+.champion-halo {
+  position: absolute;
+  inset: -10%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(232, 197, 71, 0)   0deg,
+    rgba(255, 244, 196, 0.9) 30deg,
+    rgba(232, 197, 71, 0)   60deg,
+    rgba(232, 197, 71, 0)   120deg,
+    rgba(255, 244, 196, 0.9) 150deg,
+    rgba(232, 197, 71, 0)   180deg,
+    rgba(232, 197, 71, 0)   240deg,
+    rgba(255, 244, 196, 0.9) 270deg,
+    rgba(232, 197, 71, 0)   300deg,
+    rgba(232, 197, 71, 0)   360deg
+  );
+  filter: blur(8px);
+  opacity: 0.85;
+  animation: champ-spin-rev 6s linear infinite;
+  z-index: 0;
+}
+.champion-halo::after {
+  content: '';
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(232, 197, 71, 0.55), transparent 70%);
+}
+.champion-medal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 4.8rem;
+  line-height: 1;
+  animation: champ-bounce 2.2s ease-in-out infinite;
+  filter: drop-shadow(0 6px 14px rgba(232, 197, 71, 0.85));
+  z-index: 1;
+}
+
+.champion-name {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  margin: 0.2rem 0 0.7rem;
+  background: linear-gradient(120deg,
+    #fff4c4 0%,
+    #e8c547 20%,
+    #fff8d6 40%,
+    #e8c547 60%,
+    #b8941a 80%,
+    #fff4c4 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: champ-foil 4s linear infinite;
+  position: relative;
+  z-index: 2;
+}
+
+.champion-you {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  -webkit-text-fill-color: var(--accent2);
+  background: none;
+  vertical-align: middle;
+}
+
+.champion-underline {
+  position: relative;
+  z-index: 2;
+  height: 3px;
+  width: 70%;
+  margin: 0 auto 0.7rem;
+  border-radius: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    #b8941a 15%,
+    #fff4c4 35%,
+    #e8c547 50%,
+    #fff4c4 65%,
+    #b8941a 85%,
+    transparent 100%);
+  background-size: 200% 100%;
+  animation: champ-underline 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(232, 197, 71, 0.7));
+}
+
+.champion-stars {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+}
+.champion-stars span {
+  display: inline-block;
+  animation: champ-stars 1.6s ease-in-out infinite;
+}
+.champion-stars span:nth-child(1) { animation-delay: 0s;    }
+.champion-stars span:nth-child(2) { animation-delay: 0.15s; }
+.champion-stars span:nth-child(3) { animation-delay: 0.30s; }
+.champion-stars span:nth-child(4) { animation-delay: 0.45s; }
+.champion-stars span:nth-child(5) { animation-delay: 0.60s; }
+
+.champion-marquee {
+  position: relative;
+  z-index: 2;
+  margin: 1rem -1.5rem 0;
+  padding: 0.5rem 0;
+  border-top: 1px solid rgba(232, 197, 71, 0.35);
+  background: linear-gradient(90deg,
+    rgba(232, 197, 71, 0.10),
+    rgba(232, 124, 71, 0.10),
+    rgba(232, 197, 71, 0.10));
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+          mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+}
+.champion-marquee-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: champ-marquee 22s linear infinite;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+.champion-marquee-track span {
+  padding-right: 2rem;
+}
+
+.champion-score {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.45rem;
+}
+.champion-score-num {
+  font-family: var(--font-mono);
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--accent);
+  animation: champ-pulse-num 2.4s ease-in-out infinite;
+}
+.champion-score-label {
+  font-family: var(--font-body);
+  color: var(--text3);
+  font-size: 0.85rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.champion-sparkle {
+  position: absolute;
+  font-size: 1.3rem;
+  z-index: 1;
+  filter: drop-shadow(0 0 6px rgba(232, 197, 71, 0.7));
+  pointer-events: none;
+}
+.champion-sparkle.s1  { top: 10%;    left: 6%;    animation: champ-sparkle 3.0s ease-in-out infinite;          }
+.champion-sparkle.s2  { top: 14%;    right: 8%;   animation: champ-sparkle 3.6s ease-in-out 0.4s infinite;     }
+.champion-sparkle.s3  { bottom: 28%; left: 10%;   animation: champ-sparkle 4.0s ease-in-out 1.0s infinite;     }
+.champion-sparkle.s4  { bottom: 24%; right: 7%;   animation: champ-sparkle 3.2s ease-in-out 1.4s infinite;     }
+.champion-sparkle.s5  { top: 42%;    left: 3%;    animation: champ-sparkle 3.8s ease-in-out 0.8s infinite; font-size: 1.05rem; }
+.champion-sparkle.s6  { top: 46%;    right: 4%;   animation: champ-sparkle 3.4s ease-in-out 1.6s infinite; font-size: 1.05rem; }
+.champion-sparkle.s7  { top: 28%;    left: 18%;   animation: champ-sparkle 3.7s ease-in-out 0.2s infinite; font-size: 0.95rem; }
+.champion-sparkle.s8  { top: 30%;    right: 20%;  animation: champ-sparkle 3.3s ease-in-out 1.2s infinite; font-size: 0.95rem; }
+.champion-sparkle.s9  { bottom: 38%; left: 22%;   animation: champ-sparkle 4.2s ease-in-out 0.6s infinite; font-size: 0.85rem; }
+.champion-sparkle.s10 { bottom: 36%; right: 24%;  animation: champ-sparkle 3.5s ease-in-out 1.8s infinite; font-size: 0.85rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .champion-hero,
+  .champion-rays,
+  .champion-halo,
+  .champion-medal,
+  .champion-name,
+  .champion-underline,
+  .champion-stars span,
+  .champion-marquee-track,
+  .champion-score-num,
+  .champion-sparkle { animation: none; }
+}
+
 /* ── Queue drag handle ── */
 .drag-handle {
   cursor: grab;

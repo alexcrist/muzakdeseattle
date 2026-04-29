@@ -103,10 +103,53 @@ export default function LeaderboardPage() {
         </div>
       ) : (
         <>
-          {/* Podium cards for top 3 */}
-          {leaderboard.length >= 2 && (
-            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', alignItems: 'flex-end' }}>
-              {/* 2nd place */}
+          {/* Champion hero — maximum swag for the gold medalist */}
+          <div className="champion-hero">
+            <div className="champion-rays" aria-hidden="true" />
+            <span className="champion-sparkle s1">✨</span>
+            <span className="champion-sparkle s2">⭐</span>
+            <span className="champion-sparkle s3">💎</span>
+            <span className="champion-sparkle s4">💫</span>
+            <span className="champion-sparkle s5">🔥</span>
+            <span className="champion-sparkle s6">✨</span>
+            <span className="champion-sparkle s7">💰</span>
+            <span className="champion-sparkle s8">⚡</span>
+            <span className="champion-sparkle s9">⭐</span>
+            <span className="champion-sparkle s10">💎</span>
+
+            <div className="champion-label">👑 &nbsp;R E I G N I N G &nbsp;&nbsp; C H A M P I O N&nbsp; 👑</div>
+
+            <div className="champion-medal-wrap">
+              <div className="champion-halo" aria-hidden="true" />
+              <div className="champion-medal">🥇</div>
+            </div>
+
+            <div className="champion-name">
+              {leaderboard[0].name}
+              {leaderboard[0].id === player.id && <span className="champion-you"> (that's you!)</span>}
+            </div>
+            <div className="champion-underline" aria-hidden="true" />
+
+            <div className="champion-stars" aria-hidden="true">
+              <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+            </div>
+
+            <div className="champion-score">
+              <span className="champion-score-num">{leaderboard[0].total}</span>
+              <span className="champion-score-label">pts</span>
+            </div>
+
+            <div className="champion-marquee" aria-hidden="true">
+              <div className="champion-marquee-track">
+                <span>🏆 CERTIFIED HEAVYWEIGHT &nbsp;★&nbsp; TASTEMAKER OF THE YEAR &nbsp;★&nbsp; MUZAK DON &nbsp;★&nbsp; AUX-CORD AUTHORITY &nbsp;★&nbsp; PLATINUM EARDRUM &nbsp;★&nbsp; UNDISPUTED &nbsp;🏆&nbsp;</span>
+                <span>🏆 CERTIFIED HEAVYWEIGHT &nbsp;★&nbsp; TASTEMAKER OF THE YEAR &nbsp;★&nbsp; MUZAK DON &nbsp;★&nbsp; AUX-CORD AUTHORITY &nbsp;★&nbsp; PLATINUM EARDRUM &nbsp;★&nbsp; UNDISPUTED &nbsp;🏆&nbsp;</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Silver / Bronze podium */}
+          {(leaderboard[1] || leaderboard[2]) && (
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
               {leaderboard[1] && (
                 <div className="card" style={{ flex: 1, textAlign: 'center', paddingTop: '1rem' }}>
                   <div style={{ fontSize: '1.8rem' }}>🥈</div>
@@ -118,18 +161,7 @@ export default function LeaderboardPage() {
                   </p>
                 </div>
               )}
-              {/* 1st place */}
-              <div className="card" style={{ flex: 1, textAlign: 'center', borderColor: 'var(--accent)', background: 'linear-gradient(135deg, #2a2500, #1a1700)', paddingTop: '1.25rem' }}>
-                <div style={{ fontSize: '2.2rem' }}>🥇</div>
-                <p style={{ fontWeight: 700, fontSize: '1.05rem', color: leaderboard[0].id === player.id ? 'var(--accent)' : 'var(--text)', marginTop: '0.3rem' }}>
-                  {leaderboard[0].name}
-                </p>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '1.7rem', color: 'var(--accent)' }}>
-                  {leaderboard[0].total}
-                </p>
-              </div>
-              {/* 3rd place */}
-              {leaderboard[2] ? (
+              {leaderboard[2] && (
                 <div className="card" style={{ flex: 1, textAlign: 'center', paddingTop: '1rem' }}>
                   <div style={{ fontSize: '1.8rem' }}>🥉</div>
                   <p style={{ fontWeight: 700, color: leaderboard[2].id === player.id ? 'var(--accent)' : 'var(--text)', marginTop: '0.3rem' }}>
@@ -139,14 +171,14 @@ export default function LeaderboardPage() {
                     {leaderboard[2].total}
                   </p>
                 </div>
-              ) : <div style={{ flex: 1 }} />}
+              )}
             </div>
           )}
 
           {/* Full standings */}
           <div className="card" style={{ padding: 0, marginBottom: '2rem' }}>
             {leaderboard.map((p, i) => (
-              <div key={p.id} className="lb-row">
+              <div key={p.id} className={`lb-row ${i === 0 ? 'is-champion' : ''}`}>
                 <span className={`lb-rank ${i === 0 ? 'first' : i === 1 ? 'second' : i === 2 ? 'third' : ''}`}>
                   {medalFor(i)}
                 </span>
