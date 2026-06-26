@@ -1,0 +1,109 @@
+voter,recipient,points,vote_rows,rounds_count,songs_count
+Clare,Luzak,11,5,5,5
+Crusticle,David,9,7,7,7
+David,Clare,9,7,7,7
+Faffer Dan,Clare,9,5,5,5
+Faffer Dan,Luzak,9,6,6,6
+Luzak,Crusticle,9,8,8,8
+Zach,Luzak,8,7,7,7
+David,Luzak,7,5,5,5
+Luzak,Clare,7,5,5,5
+Malcolm,David,7,4,4,4
+Malcolm,Luzak,7,7,7,7
+Zach,David,7,5,5,5
+Clare,Faffer Dan,6,4,4,4
+Julia,Yasmama,6,6,6,6
+Morg,Faffer Dan,6,4,4,4
+Morg,Luzak,6,6,6,6
+Clare,Yasmama,5,3,3,3
+David,Malcolm,5,4,4,4
+Faffer Dan,Zach,5,4,4,4
+hal,Yasmama,5,2,2,2
+Luzak,Zach,5,3,3,3
+Malcolm,Clare,5,4,4,4
+Malcolm,Zach,5,5,5,5
+Morg,David,5,5,5,5
+Zach,Julia,5,4,4,4
+Clare,Crusticle,4,4,4,4
+Clare,Malcolm,4,3,3,3
+Clare,Morg,4,3,3,3
+Crusticle,Clare,4,4,4,4
+Crusticle,Luzak,4,4,4,4
+Crusticle,Yasmama,4,4,4,4
+David,Crusticle,4,3,3,3
+David,Faffer Dan,4,2,2,2
+David,Zach,4,2,2,2
+Faffer Dan,David,4,3,3,3
+Faffer Dan,Malcolm,4,3,3,3
+hal,Crusticle,4,3,3,3
+hal,David,4,3,3,3
+Julia,Clare,4,4,4,4
+Julia,David,4,3,3,3
+Julia,Luzak,4,4,4,4
+Luzak,hal,4,4,4,4
+Luzak,Yasmama,4,4,4,4
+Malcolm,Crusticle,4,3,3,3
+Malcolm,Julia,4,4,4,4
+Morg,Malcolm,4,4,4,4
+Yasmama,Clare,4,4,4,4
+Yasmama,Malcolm,4,4,4,4
+Yasmama,Morg,4,4,4,4
+Yasmama,Zach,4,4,4,4
+Zach,Crusticle,4,3,3,3
+Zach,hal,4,3,3,3
+Crusticle,Morg,3,3,3,3
+Crusticle,Zach,3,3,3,3
+David,hal,3,3,3,3
+Faffer Dan,Crusticle,3,3,3,3
+hal,Malcolm,3,2,2,2
+hal,Morg,3,1,1,1
+Julia,Crusticle,3,3,3,3
+Julia,Faffer Dan,3,2,2,2
+Julia,hal,3,3,3,3
+Julia,Zach,3,3,3,3
+Luzak,David,3,2,2,2
+Luzak,Morg,3,3,3,3
+Malcolm,Yasmama,3,3,3,3
+Morg,Crusticle,3,3,3,3
+Morg,Zach,3,3,3,3
+Yasmama,Crusticle,3,3,3,3
+Yasmama,David,3,3,3,3
+Yasmama,Faffer Dan,3,3,3,3
+Zach,Malcolm,3,3,3,3
+Zach,Yasmama,3,2,2,2
+Clare,hal,2,2,2,2
+Clare,Zach,2,1,1,1
+Crusticle,hal,2,2,2,2
+Crusticle,Julia,2,2,2,2
+David,Morg,2,2,2,2
+Faffer Dan,hal,2,2,2,2
+Faffer Dan,Julia,2,2,2,2
+hal,Clare,2,1,1,1
+Julia,Morg,2,2,2,2
+Luzak,Julia,2,2,2,2
+Luzak,Malcolm,2,2,2,2
+Malcolm,hal,2,2,2,2
+Malcolm,Morg,2,2,2,2
+Morg,hal,2,2,2,2
+Morg,Julia,2,2,2,2
+Yasmama,hal,2,2,2,2
+Yasmama,Julia,2,2,2,2
+Zach,Faffer Dan,2,1,1,1
+Clare,David,1,1,1,1
+Clare,Julia,1,1,1,1
+Crusticle,Faffer Dan,1,1,1,1
+Crusticle,Malcolm,1,1,1,1
+David,Julia,1,1,1,1
+David,Yasmama,1,1,1,1
+Faffer Dan,Morg,1,1,1,1
+Faffer Dan,Yasmama,1,1,1,1
+hal,Faffer Dan,1,1,1,1
+hal,Julia,1,1,1,1
+hal,Luzak,1,1,1,1
+Julia,Malcolm,1,1,1,1
+Luzak,Faffer Dan,1,1,1,1
+Malcolm,Faffer Dan,1,1,1,1
+Morg,Clare,1,1,1,1
+Morg,Yasmama,1,1,1,1
+Yasmama,Luzak,1,1,1,1
+Zach,Morg,1,1,1,1

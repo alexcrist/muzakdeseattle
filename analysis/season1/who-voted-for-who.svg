@@ -1,0 +1,319 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="874" height="756" viewBox="0 0 874 756" role="img" aria-labelledby="title desc">
+<title id="title">Who voted for who: total points by voter and submitter</title>
+<desc id="desc">A directional heatmap. Rows are voters and columns are song submitters. Cell values are total points awarded.</desc>
+<rect width="100%" height="100%" fill="#fffdf7"/>
+<style>
+  .title { font: 700 24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17212b; }
+  .subtitle { font: 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #53616d; }
+  .axis { font: 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #23313c; }
+  .axis-small { font: 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #6a737b; }
+  .cell-label { font: 700 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; dominant-baseline: middle; text-anchor: middle; }
+  .total { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; fill: #2f3b44; dominant-baseline: middle; }
+  .grid { stroke: #fffdf7; stroke-width: 2; }
+  .diagonal { fill: #e5e0d5; }
+</style>
+<text id="plot-title" class="title" x="32" y="42">Who voted for who?</text>
+<text class="subtitle" x="32" y="67">Rows are voters, columns are song submitters. Values are total points across 323 vote rows in 12 completed rounds.</text>
+<text class="subtitle" x="32" y="88">Diagonal cells are blank because self-votes are not allowed. Total awarded points: 390.</text>
+<text class="axis-small" x="178" y="128">recipient / submitter</text>
+<text class="axis-small" x="36" y="146">voter</text>
+<g transform="translate(201, 144) rotate(-48)"><text class="axis" text-anchor="start">Luzak</text></g>
+<g transform="translate(247, 144) rotate(-48)"><text class="axis" text-anchor="start">David</text></g>
+<g transform="translate(293, 144) rotate(-48)"><text class="axis" text-anchor="start">Clare</text></g>
+<g transform="translate(339, 144) rotate(-48)"><text class="axis" text-anchor="start">Crusticle</text></g>
+<g transform="translate(385, 144) rotate(-48)"><text class="axis" text-anchor="start">Zach</text></g>
+<g transform="translate(431, 144) rotate(-48)"><text class="axis" text-anchor="start">Yasmama</text></g>
+<g transform="translate(477, 144) rotate(-48)"><text class="axis" text-anchor="start">Malcolm</text></g>
+<g transform="translate(523, 144) rotate(-48)"><text class="axis" text-anchor="start">Faffer Dan</text></g>
+<g transform="translate(569, 144) rotate(-48)"><text class="axis" text-anchor="start">hal</text></g>
+<g transform="translate(615, 144) rotate(-48)"><text class="axis" text-anchor="start">Morg</text></g>
+<g transform="translate(661, 144) rotate(-48)"><text class="axis" text-anchor="start">Julia</text></g>
+<text class="axis" x="166" y="183" text-anchor="end">Luzak</text>
+<rect class="grid diagonal" x="178" y="156" width="46" height="46" rx="5" fill="#e5e0d5"><title>Luzak -> Luzak: 0 points</title></rect>
+<rect class="grid" x="224" y="156" width="46" height="46" rx="5" fill="#82b9b5"><title>Luzak -> David: 3 points</title></rect>
+<text class="cell-label" x="247" y="180" fill="#24313a">3</text>
+<rect class="grid" x="270" y="156" width="46" height="46" rx="5" fill="#3a7a8c"><title>Luzak -> Clare: 7 points</title></rect>
+<text class="cell-label" x="293" y="180" fill="#ffffff">7</text>
+<rect class="grid" x="316" y="156" width="46" height="46" rx="5" fill="#285b74"><title>Luzak -> Crusticle: 9 points</title></rect>
+<text class="cell-label" x="339" y="180" fill="#ffffff">9</text>
+<rect class="grid" x="362" y="156" width="46" height="46" rx="5" fill="#519ea7"><title>Luzak -> Zach: 5 points</title></rect>
+<text class="cell-label" x="385" y="180" fill="#ffffff">5</text>
+<rect class="grid" x="408" y="156" width="46" height="46" rx="5" fill="#68abad"><title>Luzak -> Yasmama: 4 points</title></rect>
+<text class="cell-label" x="431" y="180" fill="#ffffff">4</text>
+<rect class="grid" x="454" y="156" width="46" height="46" rx="5" fill="#a0cabe"><title>Luzak -> Malcolm: 2 points</title></rect>
+<text class="cell-label" x="477" y="180" fill="#24313a">2</text>
+<rect class="grid" x="500" y="156" width="46" height="46" rx="5" fill="#c1dac7"><title>Luzak -> Faffer Dan: 1 points</title></rect>
+<text class="cell-label" x="523" y="180" fill="#24313a">1</text>
+<rect class="grid" x="546" y="156" width="46" height="46" rx="5" fill="#68abad"><title>Luzak -> hal: 4 points</title></rect>
+<text class="cell-label" x="569" y="180" fill="#ffffff">4</text>
+<rect class="grid" x="592" y="156" width="46" height="46" rx="5" fill="#82b9b5"><title>Luzak -> Morg: 3 points</title></rect>
+<text class="cell-label" x="615" y="180" fill="#24313a">3</text>
+<rect class="grid" x="638" y="156" width="46" height="46" rx="5" fill="#a0cabe"><title>Luzak -> Julia: 2 points</title></rect>
+<text class="cell-label" x="661" y="180" fill="#24313a">2</text>
+<text class="total" x="702" y="180" text-anchor="start">40</text>
+<text class="axis" x="166" y="229" text-anchor="end">David</text>
+<rect class="grid" x="178" y="202" width="46" height="46" rx="5" fill="#3a7a8c"><title>David -> Luzak: 7 points</title></rect>
+<text class="cell-label" x="201" y="226" fill="#ffffff">7</text>
+<rect class="grid diagonal" x="224" y="202" width="46" height="46" rx="5" fill="#e5e0d5"><title>David -> David: 0 points</title></rect>
+<rect class="grid" x="270" y="202" width="46" height="46" rx="5" fill="#285b74"><title>David -> Clare: 9 points</title></rect>
+<text class="cell-label" x="293" y="226" fill="#ffffff">9</text>
+<rect class="grid" x="316" y="202" width="46" height="46" rx="5" fill="#68abad"><title>David -> Crusticle: 4 points</title></rect>
+<text class="cell-label" x="339" y="226" fill="#ffffff">4</text>
+<rect class="grid" x="362" y="202" width="46" height="46" rx="5" fill="#68abad"><title>David -> Zach: 4 points</title></rect>
+<text class="cell-label" x="385" y="226" fill="#ffffff">4</text>
+<rect class="grid" x="408" y="202" width="46" height="46" rx="5" fill="#c1dac7"><title>David -> Yasmama: 1 points</title></rect>
+<text class="cell-label" x="431" y="226" fill="#24313a">1</text>
+<rect class="grid" x="454" y="202" width="46" height="46" rx="5" fill="#519ea7"><title>David -> Malcolm: 5 points</title></rect>
+<text class="cell-label" x="477" y="226" fill="#ffffff">5</text>
+<rect class="grid" x="500" y="202" width="46" height="46" rx="5" fill="#68abad"><title>David -> Faffer Dan: 4 points</title></rect>
+<text class="cell-label" x="523" y="226" fill="#ffffff">4</text>
+<rect class="grid" x="546" y="202" width="46" height="46" rx="5" fill="#82b9b5"><title>David -> hal: 3 points</title></rect>
+<text class="cell-label" x="569" y="226" fill="#24313a">3</text>
+<rect class="grid" x="592" y="202" width="46" height="46" rx="5" fill="#a0cabe"><title>David -> Morg: 2 points</title></rect>
+<text class="cell-label" x="615" y="226" fill="#24313a">2</text>
+<rect class="grid" x="638" y="202" width="46" height="46" rx="5" fill="#c1dac7"><title>David -> Julia: 1 points</title></rect>
+<text class="cell-label" x="661" y="226" fill="#24313a">1</text>
+<text class="total" x="702" y="226" text-anchor="start">40</text>
+<text class="axis" x="166" y="275" text-anchor="end">Clare</text>
+<rect class="grid" x="178" y="248" width="46" height="46" rx="5" fill="#173f5f"><title>Clare -> Luzak: 11 points</title></rect>
+<text class="cell-label" x="201" y="272" fill="#ffffff">11</text>
+<rect class="grid" x="224" y="248" width="46" height="46" rx="5" fill="#c1dac7"><title>Clare -> David: 1 points</title></rect>
+<text class="cell-label" x="247" y="272" fill="#24313a">1</text>
+<rect class="grid diagonal" x="270" y="248" width="46" height="46" rx="5" fill="#e5e0d5"><title>Clare -> Clare: 0 points</title></rect>
+<rect class="grid" x="316" y="248" width="46" height="46" rx="5" fill="#68abad"><title>Clare -> Crusticle: 4 points</title></rect>
+<text class="cell-label" x="339" y="272" fill="#ffffff">4</text>
+<rect class="grid" x="362" y="248" width="46" height="46" rx="5" fill="#a0cabe"><title>Clare -> Zach: 2 points</title></rect>
+<text class="cell-label" x="385" y="272" fill="#24313a">2</text>
+<rect class="grid" x="408" y="248" width="46" height="46" rx="5" fill="#519ea7"><title>Clare -> Yasmama: 5 points</title></rect>
+<text class="cell-label" x="431" y="272" fill="#ffffff">5</text>
+<rect class="grid" x="454" y="248" width="46" height="46" rx="5" fill="#68abad"><title>Clare -> Malcolm: 4 points</title></rect>
+<text class="cell-label" x="477" y="272" fill="#ffffff">4</text>
+<rect class="grid" x="500" y="248" width="46" height="46" rx="5" fill="#458c99"><title>Clare -> Faffer Dan: 6 points</title></rect>
+<text class="cell-label" x="523" y="272" fill="#ffffff">6</text>
+<rect class="grid" x="546" y="248" width="46" height="46" rx="5" fill="#a0cabe"><title>Clare -> hal: 2 points</title></rect>
+<text class="cell-label" x="569" y="272" fill="#24313a">2</text>
+<rect class="grid" x="592" y="248" width="46" height="46" rx="5" fill="#68abad"><title>Clare -> Morg: 4 points</title></rect>
+<text class="cell-label" x="615" y="272" fill="#ffffff">4</text>
+<rect class="grid" x="638" y="248" width="46" height="46" rx="5" fill="#c1dac7"><title>Clare -> Julia: 1 points</title></rect>
+<text class="cell-label" x="661" y="272" fill="#24313a">1</text>
+<text class="total" x="702" y="272" text-anchor="start">40</text>
+<text class="axis" x="166" y="321" text-anchor="end">Crusticle</text>
+<rect class="grid" x="178" y="294" width="46" height="46" rx="5" fill="#68abad"><title>Crusticle -> Luzak: 4 points</title></rect>
+<text class="cell-label" x="201" y="318" fill="#ffffff">4</text>
+<rect class="grid" x="224" y="294" width="46" height="46" rx="5" fill="#285b74"><title>Crusticle -> David: 9 points</title></rect>
+<text class="cell-label" x="247" y="318" fill="#ffffff">9</text>
+<rect class="grid" x="270" y="294" width="46" height="46" rx="5" fill="#68abad"><title>Crusticle -> Clare: 4 points</title></rect>
+<text class="cell-label" x="293" y="318" fill="#ffffff">4</text>
+<rect class="grid diagonal" x="316" y="294" width="46" height="46" rx="5" fill="#e5e0d5"><title>Crusticle -> Crusticle: 0 points</title></rect>
+<rect class="grid" x="362" y="294" width="46" height="46" rx="5" fill="#82b9b5"><title>Crusticle -> Zach: 3 points</title></rect>
+<text class="cell-label" x="385" y="318" fill="#24313a">3</text>
+<rect class="grid" x="408" y="294" width="46" height="46" rx="5" fill="#68abad"><title>Crusticle -> Yasmama: 4 points</title></rect>
+<text class="cell-label" x="431" y="318" fill="#ffffff">4</text>
+<rect class="grid" x="454" y="294" width="46" height="46" rx="5" fill="#c1dac7"><title>Crusticle -> Malcolm: 1 points</title></rect>
+<text class="cell-label" x="477" y="318" fill="#24313a">1</text>
+<rect class="grid" x="500" y="294" width="46" height="46" rx="5" fill="#c1dac7"><title>Crusticle -> Faffer Dan: 1 points</title></rect>
+<text class="cell-label" x="523" y="318" fill="#24313a">1</text>
+<rect class="grid" x="546" y="294" width="46" height="46" rx="5" fill="#a0cabe"><title>Crusticle -> hal: 2 points</title></rect>
+<text class="cell-label" x="569" y="318" fill="#24313a">2</text>
+<rect class="grid" x="592" y="294" width="46" height="46" rx="5" fill="#82b9b5"><title>Crusticle -> Morg: 3 points</title></rect>
+<text class="cell-label" x="615" y="318" fill="#24313a">3</text>
+<rect class="grid" x="638" y="294" width="46" height="46" rx="5" fill="#a0cabe"><title>Crusticle -> Julia: 2 points</title></rect>
+<text class="cell-label" x="661" y="318" fill="#24313a">2</text>
+<text class="total" x="702" y="318" text-anchor="start">33</text>
+<text class="axis" x="166" y="367" text-anchor="end">Zach</text>
+<rect class="grid" x="178" y="340" width="46" height="46" rx="5" fill="#316a80"><title>Zach -> Luzak: 8 points</title></rect>
+<text class="cell-label" x="201" y="364" fill="#ffffff">8</text>
+<rect class="grid" x="224" y="340" width="46" height="46" rx="5" fill="#3a7a8c"><title>Zach -> David: 7 points</title></rect>
+<text class="cell-label" x="247" y="364" fill="#ffffff">7</text>
+<rect class="grid" x="270" y="340" width="46" height="46" rx="5" fill="#faf8f0"><title>Zach -> Clare: 0 points</title></rect>
+<rect class="grid" x="316" y="340" width="46" height="46" rx="5" fill="#68abad"><title>Zach -> Crusticle: 4 points</title></rect>
+<text class="cell-label" x="339" y="364" fill="#ffffff">4</text>
+<rect class="grid diagonal" x="362" y="340" width="46" height="46" rx="5" fill="#e5e0d5"><title>Zach -> Zach: 0 points</title></rect>
+<rect class="grid" x="408" y="340" width="46" height="46" rx="5" fill="#82b9b5"><title>Zach -> Yasmama: 3 points</title></rect>
+<text class="cell-label" x="431" y="364" fill="#24313a">3</text>
+<rect class="grid" x="454" y="340" width="46" height="46" rx="5" fill="#82b9b5"><title>Zach -> Malcolm: 3 points</title></rect>
+<text class="cell-label" x="477" y="364" fill="#24313a">3</text>
+<rect class="grid" x="500" y="340" width="46" height="46" rx="5" fill="#a0cabe"><title>Zach -> Faffer Dan: 2 points</title></rect>
+<text class="cell-label" x="523" y="364" fill="#24313a">2</text>
+<rect class="grid" x="546" y="340" width="46" height="46" rx="5" fill="#68abad"><title>Zach -> hal: 4 points</title></rect>
+<text class="cell-label" x="569" y="364" fill="#ffffff">4</text>
+<rect class="grid" x="592" y="340" width="46" height="46" rx="5" fill="#c1dac7"><title>Zach -> Morg: 1 points</title></rect>
+<text class="cell-label" x="615" y="364" fill="#24313a">1</text>
+<rect class="grid" x="638" y="340" width="46" height="46" rx="5" fill="#519ea7"><title>Zach -> Julia: 5 points</title></rect>
+<text class="cell-label" x="661" y="364" fill="#ffffff">5</text>
+<text class="total" x="702" y="364" text-anchor="start">37</text>
+<text class="axis" x="166" y="413" text-anchor="end">Yasmama</text>
+<rect class="grid" x="178" y="386" width="46" height="46" rx="5" fill="#c1dac7"><title>Yasmama -> Luzak: 1 points</title></rect>
+<text class="cell-label" x="201" y="410" fill="#24313a">1</text>
+<rect class="grid" x="224" y="386" width="46" height="46" rx="5" fill="#82b9b5"><title>Yasmama -> David: 3 points</title></rect>
+<text class="cell-label" x="247" y="410" fill="#24313a">3</text>
+<rect class="grid" x="270" y="386" width="46" height="46" rx="5" fill="#68abad"><title>Yasmama -> Clare: 4 points</title></rect>
+<text class="cell-label" x="293" y="410" fill="#ffffff">4</text>
+<rect class="grid" x="316" y="386" width="46" height="46" rx="5" fill="#82b9b5"><title>Yasmama -> Crusticle: 3 points</title></rect>
+<text class="cell-label" x="339" y="410" fill="#24313a">3</text>
+<rect class="grid" x="362" y="386" width="46" height="46" rx="5" fill="#68abad"><title>Yasmama -> Zach: 4 points</title></rect>
+<text class="cell-label" x="385" y="410" fill="#ffffff">4</text>
+<rect class="grid diagonal" x="408" y="386" width="46" height="46" rx="5" fill="#e5e0d5"><title>Yasmama -> Yasmama: 0 points</title></rect>
+<rect class="grid" x="454" y="386" width="46" height="46" rx="5" fill="#68abad"><title>Yasmama -> Malcolm: 4 points</title></rect>
+<text class="cell-label" x="477" y="410" fill="#ffffff">4</text>
+<rect class="grid" x="500" y="386" width="46" height="46" rx="5" fill="#82b9b5"><title>Yasmama -> Faffer Dan: 3 points</title></rect>
+<text class="cell-label" x="523" y="410" fill="#24313a">3</text>
+<rect class="grid" x="546" y="386" width="46" height="46" rx="5" fill="#a0cabe"><title>Yasmama -> hal: 2 points</title></rect>
+<text class="cell-label" x="569" y="410" fill="#24313a">2</text>
+<rect class="grid" x="592" y="386" width="46" height="46" rx="5" fill="#68abad"><title>Yasmama -> Morg: 4 points</title></rect>
+<text class="cell-label" x="615" y="410" fill="#ffffff">4</text>
+<rect class="grid" x="638" y="386" width="46" height="46" rx="5" fill="#a0cabe"><title>Yasmama -> Julia: 2 points</title></rect>
+<text class="cell-label" x="661" y="410" fill="#24313a">2</text>
+<text class="total" x="702" y="410" text-anchor="start">30</text>
+<text class="axis" x="166" y="459" text-anchor="end">Malcolm</text>
+<rect class="grid" x="178" y="432" width="46" height="46" rx="5" fill="#3a7a8c"><title>Malcolm -> Luzak: 7 points</title></rect>
+<text class="cell-label" x="201" y="456" fill="#ffffff">7</text>
+<rect class="grid" x="224" y="432" width="46" height="46" rx="5" fill="#3a7a8c"><title>Malcolm -> David: 7 points</title></rect>
+<text class="cell-label" x="247" y="456" fill="#ffffff">7</text>
+<rect class="grid" x="270" y="432" width="46" height="46" rx="5" fill="#519ea7"><title>Malcolm -> Clare: 5 points</title></rect>
+<text class="cell-label" x="293" y="456" fill="#ffffff">5</text>
+<rect class="grid" x="316" y="432" width="46" height="46" rx="5" fill="#68abad"><title>Malcolm -> Crusticle: 4 points</title></rect>
+<text class="cell-label" x="339" y="456" fill="#ffffff">4</text>
+<rect class="grid" x="362" y="432" width="46" height="46" rx="5" fill="#519ea7"><title>Malcolm -> Zach: 5 points</title></rect>
+<text class="cell-label" x="385" y="456" fill="#ffffff">5</text>
+<rect class="grid" x="408" y="432" width="46" height="46" rx="5" fill="#82b9b5"><title>Malcolm -> Yasmama: 3 points</title></rect>
+<text class="cell-label" x="431" y="456" fill="#24313a">3</text>
+<rect class="grid diagonal" x="454" y="432" width="46" height="46" rx="5" fill="#e5e0d5"><title>Malcolm -> Malcolm: 0 points</title></rect>
+<rect class="grid" x="500" y="432" width="46" height="46" rx="5" fill="#c1dac7"><title>Malcolm -> Faffer Dan: 1 points</title></rect>
+<text class="cell-label" x="523" y="456" fill="#24313a">1</text>
+<rect class="grid" x="546" y="432" width="46" height="46" rx="5" fill="#a0cabe"><title>Malcolm -> hal: 2 points</title></rect>
+<text class="cell-label" x="569" y="456" fill="#24313a">2</text>
+<rect class="grid" x="592" y="432" width="46" height="46" rx="5" fill="#a0cabe"><title>Malcolm -> Morg: 2 points</title></rect>
+<text class="cell-label" x="615" y="456" fill="#24313a">2</text>
+<rect class="grid" x="638" y="432" width="46" height="46" rx="5" fill="#68abad"><title>Malcolm -> Julia: 4 points</title></rect>
+<text class="cell-label" x="661" y="456" fill="#ffffff">4</text>
+<text class="total" x="702" y="456" text-anchor="start">40</text>
+<text class="axis" x="166" y="505" text-anchor="end">Faffer Dan</text>
+<rect class="grid" x="178" y="478" width="46" height="46" rx="5" fill="#285b74"><title>Faffer Dan -> Luzak: 9 points</title></rect>
+<text class="cell-label" x="201" y="502" fill="#ffffff">9</text>
+<rect class="grid" x="224" y="478" width="46" height="46" rx="5" fill="#68abad"><title>Faffer Dan -> David: 4 points</title></rect>
+<text class="cell-label" x="247" y="502" fill="#ffffff">4</text>
+<rect class="grid" x="270" y="478" width="46" height="46" rx="5" fill="#285b74"><title>Faffer Dan -> Clare: 9 points</title></rect>
+<text class="cell-label" x="293" y="502" fill="#ffffff">9</text>
+<rect class="grid" x="316" y="478" width="46" height="46" rx="5" fill="#82b9b5"><title>Faffer Dan -> Crusticle: 3 points</title></rect>
+<text class="cell-label" x="339" y="502" fill="#24313a">3</text>
+<rect class="grid" x="362" y="478" width="46" height="46" rx="5" fill="#519ea7"><title>Faffer Dan -> Zach: 5 points</title></rect>
+<text class="cell-label" x="385" y="502" fill="#ffffff">5</text>
+<rect class="grid" x="408" y="478" width="46" height="46" rx="5" fill="#c1dac7"><title>Faffer Dan -> Yasmama: 1 points</title></rect>
+<text class="cell-label" x="431" y="502" fill="#24313a">1</text>
+<rect class="grid" x="454" y="478" width="46" height="46" rx="5" fill="#68abad"><title>Faffer Dan -> Malcolm: 4 points</title></rect>
+<text class="cell-label" x="477" y="502" fill="#ffffff">4</text>
+<rect class="grid diagonal" x="500" y="478" width="46" height="46" rx="5" fill="#e5e0d5"><title>Faffer Dan -> Faffer Dan: 0 points</title></rect>
+<rect class="grid" x="546" y="478" width="46" height="46" rx="5" fill="#a0cabe"><title>Faffer Dan -> hal: 2 points</title></rect>
+<text class="cell-label" x="569" y="502" fill="#24313a">2</text>
+<rect class="grid" x="592" y="478" width="46" height="46" rx="5" fill="#c1dac7"><title>Faffer Dan -> Morg: 1 points</title></rect>
+<text class="cell-label" x="615" y="502" fill="#24313a">1</text>
+<rect class="grid" x="638" y="478" width="46" height="46" rx="5" fill="#a0cabe"><title>Faffer Dan -> Julia: 2 points</title></rect>
+<text class="cell-label" x="661" y="502" fill="#24313a">2</text>
+<text class="total" x="702" y="502" text-anchor="start">40</text>
+<text class="axis" x="166" y="551" text-anchor="end">hal</text>
+<rect class="grid" x="178" y="524" width="46" height="46" rx="5" fill="#c1dac7"><title>hal -> Luzak: 1 points</title></rect>
+<text class="cell-label" x="201" y="548" fill="#24313a">1</text>
+<rect class="grid" x="224" y="524" width="46" height="46" rx="5" fill="#68abad"><title>hal -> David: 4 points</title></rect>
+<text class="cell-label" x="247" y="548" fill="#ffffff">4</text>
+<rect class="grid" x="270" y="524" width="46" height="46" rx="5" fill="#a0cabe"><title>hal -> Clare: 2 points</title></rect>
+<text class="cell-label" x="293" y="548" fill="#24313a">2</text>
+<rect class="grid" x="316" y="524" width="46" height="46" rx="5" fill="#68abad"><title>hal -> Crusticle: 4 points</title></rect>
+<text class="cell-label" x="339" y="548" fill="#ffffff">4</text>
+<rect class="grid" x="362" y="524" width="46" height="46" rx="5" fill="#faf8f0"><title>hal -> Zach: 0 points</title></rect>
+<rect class="grid" x="408" y="524" width="46" height="46" rx="5" fill="#519ea7"><title>hal -> Yasmama: 5 points</title></rect>
+<text class="cell-label" x="431" y="548" fill="#ffffff">5</text>
+<rect class="grid" x="454" y="524" width="46" height="46" rx="5" fill="#82b9b5"><title>hal -> Malcolm: 3 points</title></rect>
+<text class="cell-label" x="477" y="548" fill="#24313a">3</text>
+<rect class="grid" x="500" y="524" width="46" height="46" rx="5" fill="#c1dac7"><title>hal -> Faffer Dan: 1 points</title></rect>
+<text class="cell-label" x="523" y="548" fill="#24313a">1</text>
+<rect class="grid diagonal" x="546" y="524" width="46" height="46" rx="5" fill="#e5e0d5"><title>hal -> hal: 0 points</title></rect>
+<rect class="grid" x="592" y="524" width="46" height="46" rx="5" fill="#82b9b5"><title>hal -> Morg: 3 points</title></rect>
+<text class="cell-label" x="615" y="548" fill="#24313a">3</text>
+<rect class="grid" x="638" y="524" width="46" height="46" rx="5" fill="#c1dac7"><title>hal -> Julia: 1 points</title></rect>
+<text class="cell-label" x="661" y="548" fill="#24313a">1</text>
+<text class="total" x="702" y="548" text-anchor="start">24</text>
+<text class="axis" x="166" y="597" text-anchor="end">Morg</text>
+<rect class="grid" x="178" y="570" width="46" height="46" rx="5" fill="#458c99"><title>Morg -> Luzak: 6 points</title></rect>
+<text class="cell-label" x="201" y="594" fill="#ffffff">6</text>
+<rect class="grid" x="224" y="570" width="46" height="46" rx="5" fill="#519ea7"><title>Morg -> David: 5 points</title></rect>
+<text class="cell-label" x="247" y="594" fill="#ffffff">5</text>
+<rect class="grid" x="270" y="570" width="46" height="46" rx="5" fill="#c1dac7"><title>Morg -> Clare: 1 points</title></rect>
+<text class="cell-label" x="293" y="594" fill="#24313a">1</text>
+<rect class="grid" x="316" y="570" width="46" height="46" rx="5" fill="#82b9b5"><title>Morg -> Crusticle: 3 points</title></rect>
+<text class="cell-label" x="339" y="594" fill="#24313a">3</text>
+<rect class="grid" x="362" y="570" width="46" height="46" rx="5" fill="#82b9b5"><title>Morg -> Zach: 3 points</title></rect>
+<text class="cell-label" x="385" y="594" fill="#24313a">3</text>
+<rect class="grid" x="408" y="570" width="46" height="46" rx="5" fill="#c1dac7"><title>Morg -> Yasmama: 1 points</title></rect>
+<text class="cell-label" x="431" y="594" fill="#24313a">1</text>
+<rect class="grid" x="454" y="570" width="46" height="46" rx="5" fill="#68abad"><title>Morg -> Malcolm: 4 points</title></rect>
+<text class="cell-label" x="477" y="594" fill="#ffffff">4</text>
+<rect class="grid" x="500" y="570" width="46" height="46" rx="5" fill="#458c99"><title>Morg -> Faffer Dan: 6 points</title></rect>
+<text class="cell-label" x="523" y="594" fill="#ffffff">6</text>
+<rect class="grid" x="546" y="570" width="46" height="46" rx="5" fill="#a0cabe"><title>Morg -> hal: 2 points</title></rect>
+<text class="cell-label" x="569" y="594" fill="#24313a">2</text>
+<rect class="grid diagonal" x="592" y="570" width="46" height="46" rx="5" fill="#e5e0d5"><title>Morg -> Morg: 0 points</title></rect>
+<rect class="grid" x="638" y="570" width="46" height="46" rx="5" fill="#a0cabe"><title>Morg -> Julia: 2 points</title></rect>
+<text class="cell-label" x="661" y="594" fill="#24313a">2</text>
+<text class="total" x="702" y="594" text-anchor="start">33</text>
+<text class="axis" x="166" y="643" text-anchor="end">Julia</text>
+<rect class="grid" x="178" y="616" width="46" height="46" rx="5" fill="#68abad"><title>Julia -> Luzak: 4 points</title></rect>
+<text class="cell-label" x="201" y="640" fill="#ffffff">4</text>
+<rect class="grid" x="224" y="616" width="46" height="46" rx="5" fill="#68abad"><title>Julia -> David: 4 points</title></rect>
+<text class="cell-label" x="247" y="640" fill="#ffffff">4</text>
+<rect class="grid" x="270" y="616" width="46" height="46" rx="5" fill="#68abad"><title>Julia -> Clare: 4 points</title></rect>
+<text class="cell-label" x="293" y="640" fill="#ffffff">4</text>
+<rect class="grid" x="316" y="616" width="46" height="46" rx="5" fill="#82b9b5"><title>Julia -> Crusticle: 3 points</title></rect>
+<text class="cell-label" x="339" y="640" fill="#24313a">3</text>
+<rect class="grid" x="362" y="616" width="46" height="46" rx="5" fill="#82b9b5"><title>Julia -> Zach: 3 points</title></rect>
+<text class="cell-label" x="385" y="640" fill="#24313a">3</text>
+<rect class="grid" x="408" y="616" width="46" height="46" rx="5" fill="#458c99"><title>Julia -> Yasmama: 6 points</title></rect>
+<text class="cell-label" x="431" y="640" fill="#ffffff">6</text>
+<rect class="grid" x="454" y="616" width="46" height="46" rx="5" fill="#c1dac7"><title>Julia -> Malcolm: 1 points</title></rect>
+<text class="cell-label" x="477" y="640" fill="#24313a">1</text>
+<rect class="grid" x="500" y="616" width="46" height="46" rx="5" fill="#82b9b5"><title>Julia -> Faffer Dan: 3 points</title></rect>
+<text class="cell-label" x="523" y="640" fill="#24313a">3</text>
+<rect class="grid" x="546" y="616" width="46" height="46" rx="5" fill="#82b9b5"><title>Julia -> hal: 3 points</title></rect>
+<text class="cell-label" x="569" y="640" fill="#24313a">3</text>
+<rect class="grid" x="592" y="616" width="46" height="46" rx="5" fill="#a0cabe"><title>Julia -> Morg: 2 points</title></rect>
+<text class="cell-label" x="615" y="640" fill="#24313a">2</text>
+<rect class="grid diagonal" x="638" y="616" width="46" height="46" rx="5" fill="#e5e0d5"><title>Julia -> Julia: 0 points</title></rect>
+<text class="total" x="702" y="640" text-anchor="start">33</text>
+<text class="axis-small" x="702" y="144" text-anchor="start">given</text>
+<text class="total" x="201" y="686" text-anchor="middle">58</text>
+<text class="total" x="247" y="686" text-anchor="middle">47</text>
+<text class="total" x="293" y="686" text-anchor="middle">45</text>
+<text class="total" x="339" y="686" text-anchor="middle">41</text>
+<text class="total" x="385" y="686" text-anchor="middle">34</text>
+<text class="total" x="431" y="686" text-anchor="middle">33</text>
+<text class="total" x="477" y="686" text-anchor="middle">31</text>
+<text class="total" x="523" y="686" text-anchor="middle">28</text>
+<text class="total" x="569" y="686" text-anchor="middle">26</text>
+<text class="total" x="615" y="686" text-anchor="middle">25</text>
+<text class="total" x="661" y="686" text-anchor="middle">22</text>
+<text class="axis-small" x="166" y="686" text-anchor="end">received</text>
+<g transform="translate(756, 168)">
+<text class="axis-small" x="0" y="0">points</text>
+<rect x="0" y="14" width="22" height="22" rx="4" fill="#faf8f0" stroke="#fffdf7"/>
+<text class="axis-small" x="31" y="29">0</text>
+<rect x="0" y="42" width="22" height="22" rx="4" fill="#82b9b5" stroke="#fffdf7"/>
+<text class="axis-small" x="31" y="57">3</text>
+<rect x="0" y="70" width="22" height="22" rx="4" fill="#458c99" stroke="#fffdf7"/>
+<text class="axis-small" x="31" y="85">6</text>
+<rect x="0" y="98" width="22" height="22" rx="4" fill="#285b74" stroke="#fffdf7"/>
+<text class="axis-small" x="31" y="113">9</text>
+<rect x="0" y="126" width="22" height="22" rx="4" fill="#173f5f" stroke="#fffdf7"/>
+<text class="axis-small" x="31" y="141">11</text>
+</g>
+<g transform="translate(756, 346)">
+<text class="axis-small" x="0" y="0">top pairs</text>
+<text class="axis-small" x="0" y="22">Clare -&gt; Luzak: 11</text>
+<text class="axis-small" x="0" y="42">Crusticle -&gt; David: 9</text>
+<text class="axis-small" x="0" y="62">David -&gt; Clare: 9</text>
+<text class="axis-small" x="0" y="82">Faffer Dan -&gt; Clare: 9</text>
+<text class="axis-small" x="0" y="102">Faffer Dan -&gt; Luzak: 9</text>
+<text class="axis-small" x="0" y="122">Luzak -&gt; Crusticle: 9</text>
+</g>
+<line x1="178" y1="154" x2="684" y2="154" stroke="#d8d0c2"/>
+<line x1="176" y1="156" x2="176" y2="662" stroke="#d8d0c2"/>
+</svg>
