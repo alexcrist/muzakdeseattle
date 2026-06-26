@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 const ITEMS = [
   { path: '/', icon: '♪', label: 'Home' },
   { path: '/rounds', icon: '□', label: 'Rounds' },
-  { path: '/leaderboard', icon: '★', label: 'Board' },
   { path: '/players', icon: '●', label: 'Players' },
   { path: '/admin', icon: '!', label: 'Admin' },
 ]
@@ -18,7 +17,7 @@ export default function Nav() {
         <button
           type="button"
           key={item.path}
-          className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+          className={`nav-item ${location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(`${item.path}/`)) ? 'active' : ''}`}
           onClick={() => navigate(item.path)}
         >
           <span className="nav-icon" aria-hidden="true">{item.icon}</span>

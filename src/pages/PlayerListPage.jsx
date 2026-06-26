@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { buildLeaderboard } from '../lib/scoring.js'
-import { getScoredRoundIds } from '../lib/schedule.js'
+import { getLeagueContext, getScoredRoundIds } from '../lib/schedule.js'
 import { supabase } from '../lib/supabase.js'
 
 async function fetchPlayersData() {
@@ -60,6 +60,8 @@ export default function PlayerListPage() {
   }, [])
 
   const scoredRoundIds = useMemo(() => getScoredRoundIds(data.rounds, settings), [data.rounds, settings])
+  const context = useMemo(() => getLeagueContext(data.rounds, settings), [data.rounds, settings])
+  const scoredRounds = context.orderedRounds.filter(round => scoredRoundIds.has(round.id))
   const leaderboard = useMemo(() => buildLeaderboard({
     players: data.players,
     rounds: data.rounds,
@@ -69,12 +71,24 @@ export default function PlayerListPage() {
     groupSongs: data.groupSongs,
     scoredRoundIds,
   }), [data, scoredRoundIds])
-  const scoreMap = Object.fromEntries(leaderboard.map(row => [row.id, row.total]))
+  const leaderboardMap = Object.fromEntries(leaderboard.map(row => [row.id, row]))
   const submissionCounts = data.songs.reduce((counts, song) => {
     if (!scoredRoundIds.has(song.round_id)) return counts
     counts[song.player_id] = (counts[song.player_id] || 0) + 1
     return counts
   }, {})
+  const rankedPlayers = data.players
+    .map(row => {
+      const score = leaderboardMap[row.id]
+      return {
+        ...row,
+        total: score?.total || 0,
+        byRound: score?.byRound || {},
+      }
+    })
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+  const leader = rankedPlayers.find(row => row.total > 0)
+  const activeCount = data.players.filter(row => row.active).length
 
   if (loading) {
     return (
@@ -84,59 +98,92 @@ export default function PlayerListPage() {
     )
   }
 
-  const active = data.players.filter(row => row.active)
-  const inactive = data.players.filter(row => !row.active)
-
   return (
     <main className="page">
       <section className="page-header">
         <div>
-          <p className="eyebrow">Profiles</p>
+          <p className="eyebrow">Season standings</p>
           <h1>Players</h1>
-          <p>Pick a player to see their profile and songs.</p>
+          <p>Standings, profiles, and songs in one place.</p>
         </div>
+        <span className="soft-tag">{scoredRounds.length} scored rounds</span>
       </section>
 
-      <PlayerSection
-        title="Active players"
-        players={active}
-        currentPlayerId={player.id}
-        scoreMap={scoreMap}
-        submissionCounts={submissionCounts}
-      />
+      {leader ? (
+        <Link className="leader-spotlight leader-spotlight-link" to={`/players/${leader.id}`}>
+          <Avatar player={leader} size="xl" />
+          <div>
+            <p className="eyebrow">Current leader</p>
+            <h2>{leader.name}{leader.id === player.id ? ' (you)' : ''}</h2>
+            <p>{leader.total} points</p>
+          </div>
+        </Link>
+      ) : (
+        <section className="empty-state compact">
+          <h2>No scores yet</h2>
+          <p>Standings appear once a round reaches appreciation.</p>
+        </section>
+      )}
 
-      {inactive.length > 0 && (
-        <PlayerSection
-          title="Inactive players"
-          players={inactive}
-          currentPlayerId={player.id}
-          scoreMap={scoreMap}
-          submissionCounts={submissionCounts}
-        />
+      <section className="round-section">
+        <div className="section-heading">
+          <h2>Standings</h2>
+          <span className="soft-tag">{activeCount} active</span>
+        </div>
+        {rankedPlayers.length === 0 ? (
+          <div className="empty-state compact">
+            <p>No players yet.</p>
+          </div>
+        ) : (
+          <div className="card leaderboard-list player-standings-list">
+            {rankedPlayers.map((row, index) => (
+              <Link
+                className={`leader-row player-standings-row player-row-link ${row.id === player.id ? 'is-you' : ''} ${row.active ? '' : 'inactive'}`}
+                to={`/players/${row.id}`}
+                key={row.id}
+              >
+                <span className="rank">{index + 1}</span>
+                <Avatar player={row} />
+                <span className="leader-name">
+                  {row.name}{row.id === player.id ? ' (you)' : ''}
+                  <small>{submissionCounts[row.id] || 0} submissions{row.active ? '' : ' · inactive'}</small>
+                </span>
+                <strong>{row.total}</strong>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {scoredRounds.length > 0 && (
+        <section className="round-breakdown">
+          <div className="section-heading">
+            <h2>Round breakdown</h2>
+          </div>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  {scoredRounds.map(round => <th key={round.id}>{round.theme_name}</th>)}
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankedPlayers.map(row => (
+                  <tr key={row.id}>
+                    <td>{row.name}</td>
+                    {scoredRounds.map(round => (
+                      <td key={round.id}>{row.byRound[round.id] || '-'}</td>
+                    ))}
+                    <td><strong>{row.total}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </main>
-  )
-}
-
-function PlayerSection({ title, players, currentPlayerId, scoreMap, submissionCounts }) {
-  return (
-    <section className="round-section">
-      <div className="section-heading">
-        <h2>{title}</h2>
-        <span className="soft-tag">{players.length}</span>
-      </div>
-      <div className="player-list">
-        {players.map(player => (
-          <Link className={`player-row player-row-link ${player.active ? '' : 'inactive'}`} to={`/players/${player.id}`} key={player.id}>
-            <Avatar player={player} />
-            <div>
-              <h3>{player.name}{player.id === currentPlayerId ? ' (you)' : ''}</h3>
-              <p>{submissionCounts[player.id] || 0} submissions · {scoreMap[player.id] || 0} pts</p>
-            </div>
-            <span className="soft-tag">View</span>
-          </Link>
-        ))}
-      </div>
-    </section>
   )
 }
