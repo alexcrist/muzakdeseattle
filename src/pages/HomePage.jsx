@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Avatar from '../components/Avatar.jsx'
 import Countdown from '../components/Countdown.jsx'
 import { usePlayer, useSettings } from '../App.jsx'
+import { listeningOrderFor } from '../lib/listeningOrder.js'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
 import { formatPacificDate, getLeagueContext, getRoundTiming, PHASES } from '../lib/schedule.js'
 import { supabase } from '../lib/supabase.js'
@@ -36,6 +37,42 @@ function playerName(player) {
 function commentsForEntry(comments, entry) {
   const ids = new Set(entry.member_song_ids || [entry.canonical_song_id])
   return comments.filter(comment => ids.has(comment.song_id))
+}
+
+function serviceLabelForUrl(url = '') {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '')
+    if (host.includes('spotify.com')) return 'Spotify'
+    if (host.includes('tidal.com')) return 'TIDAL'
+    if (host.includes('youtube.com') || host.includes('youtu.be')) return 'YouTube'
+    if (host.includes('bandcamp.com')) return 'Bandcamp'
+    if (host.includes('soundcloud.com')) return 'SoundCloud'
+    if (host.includes('music.apple.com')) return 'Apple Music'
+  } catch {
+    return 'Listen'
+  }
+  return 'Listen'
+}
+
+function songQuery(song) {
+  return encodeURIComponent(`${song.artist || ''} ${song.title || ''}`.trim())
+}
+
+function searchUrl(service, song) {
+  const query = songQuery(song)
+  if (service === 'spotify') return `https://open.spotify.com/search/${query}`
+  if (service === 'tidal') return `https://tidal.com/search?q=${query}`
+  return `https://www.youtube.com/results?search_query=${query}`
+}
+
+function copyTextFor(items) {
+  return items
+    .map((song, index) => {
+      const album = song.album ? ` (${song.album})` : ''
+      const link = song.link ? `\n   ${song.link}` : ''
+      return `${index + 1}. ${song.artist} - ${song.title}${album}${link}`
+    })
+    .join('\n')
 }
 
 async function fetchHomeData() {
@@ -336,6 +373,9 @@ function SubmissionView({ round, player, songs, activePlayers, onChanged }) {
 
 function VotingView({ round, player, songs, votes, comments, activePlayers, pointsTotal, onChanged }) {
   const [draftVotes, setDraftVotes] = useState({})
+  const orderedSongs = useMemo(() => (
+    listeningOrderFor(songs, { roundId: round.id, playerId: player.id })
+  ), [songs, round.id, player.id])
 
   useEffect(() => {
     const mine = {}
@@ -401,47 +441,50 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
             <p>Voting is open, but nobody submitted a song.</p>
           </div>
         ) : (
-          songs.map((song, index) => {
-            const isOwn = song.player_id === player.id
-            const songComments = comments.filter(comment => comment.song_id === song.id)
-            return (
-              <article className={`song-card ${isOwn ? 'is-own' : ''}`} key={song.id}>
-                <div className="song-card-main">
-                  <span className="song-number">{index + 1}</span>
-                  <div>
-                    <h2>{song.title}</h2>
-                    <p>{song.artist}{song.album ? ` · ${song.album}` : ''}</p>
-                    <div className="song-actions">
-                      {song.link && <a href={song.link} target="_blank" rel="noreferrer">Listen</a>}
-                      <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${song.artist} ${song.title}`)}`} target="_blank" rel="noreferrer">YouTube</a>
+          <>
+            <ListeningOrderPanel items={orderedSongs} />
+            {orderedSongs.map((song, index) => {
+              const isOwn = song.player_id === player.id
+              const songComments = comments.filter(comment => comment.song_id === song.id)
+              return (
+                <article className={`song-card ${isOwn ? 'is-own' : ''}`} key={song.id}>
+                  <div className="song-card-main">
+                    <span className="song-number">{index + 1}</span>
+                    <div>
+                      <h2>{song.title}</h2>
+                      <p>{song.artist}{song.album ? ` · ${song.album}` : ''}</p>
+                      <div className="song-actions">
+                        {song.link && <a href={song.link} target="_blank" rel="noreferrer">{serviceLabelForUrl(song.link)}</a>}
+                        <a href={searchUrl('youtube', song)} target="_blank" rel="noreferrer">YouTube</a>
+                      </div>
+                      {song.submitter_note && <p className="note">{song.submitter_note}</p>}
                     </div>
-                    {song.submitter_note && <p className="note">{song.submitter_note}</p>}
                   </div>
-                </div>
 
-                <div className="vote-control">
-                  {isOwn ? (
-                    <span className="soft-tag">Your song</span>
-                  ) : (
-                    <>
-                      <button type="button" className="icon-btn" onClick={() => adjustVote(song, -1)} disabled={(draftVotes[song.id] || 0) <= 0}>−</button>
-                      <strong>{draftVotes[song.id] || 0}</strong>
-                      <button type="button" className="icon-btn primary" onClick={() => adjustVote(song, 1)} disabled={pointsRemaining <= 0}>+</button>
-                    </>
-                  )}
-                </div>
+                  <div className="vote-control">
+                    {isOwn ? (
+                      <span className="soft-tag">Your song</span>
+                    ) : (
+                      <>
+                        <button type="button" className="icon-btn" onClick={() => adjustVote(song, -1)} disabled={(draftVotes[song.id] || 0) <= 0}>−</button>
+                        <strong>{draftVotes[song.id] || 0}</strong>
+                        <button type="button" className="icon-btn primary" onClick={() => adjustVote(song, 1)} disabled={pointsRemaining <= 0}>+</button>
+                      </>
+                    )}
+                  </div>
 
-                <CommentThread
-                  comments={songComments}
-                  player={player}
-                  revealAuthors={false}
-                  songId={song.id}
-                  onChanged={onChanged}
-                  roundId={round.id}
-                />
-              </article>
-            )
-          })
+                  <CommentThread
+                    comments={songComments}
+                    player={player}
+                    revealAuthors={false}
+                    songId={song.id}
+                    onChanged={onChanged}
+                    roundId={round.id}
+                  />
+                </article>
+              )
+            })}
+          </>
         )}
       </section>
     </section>
@@ -450,6 +493,13 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
 
 function AppreciationView({ round, player, songs, votes, comments, duplicateGroups, groupSongs, onChanged }) {
   const entries = buildSongEntries({ songs, votes, duplicateGroups, groupSongs })
+  const listeningEntries = useMemo(() => (
+    listeningOrderFor(entries, {
+      roundId: round.id,
+      playerId: player.id,
+      getId: entry => entry.canonical_song_id || entry.id,
+    })
+  ), [entries, round.id, player.id])
   const winner = entries[0]
 
   return (
@@ -469,51 +519,98 @@ function AppreciationView({ round, player, songs, votes, comments, duplicateGrou
           <p>This round did not receive submissions.</p>
         </div>
       ) : (
-        entries.map((entry, index) => (
-          <article className={`song-card revealed ${index === 0 ? 'top-entry' : ''}`} key={entry.id}>
-            <div className="results-row">
-              <div className="song-card-main">
-                <span className="song-number">{index + 1}</span>
-                <div>
-                  <div className="section-heading compact">
-                    <h2>{entry.title}</h2>
-                    {entry.isDuplicate && <span className="soft-tag">Merged duplicate</span>}
+        <>
+          <ListeningOrderPanel items={listeningEntries} />
+          {entries.map((entry, index) => (
+            <article className={`song-card revealed ${index === 0 ? 'top-entry' : ''}`} key={entry.id}>
+              <div className="results-row">
+                <div className="song-card-main">
+                  <span className="song-number">{index + 1}</span>
+                  <div>
+                    <div className="section-heading compact">
+                      <h2>{entry.title}</h2>
+                      {entry.isDuplicate && <span className="soft-tag">Merged duplicate</span>}
+                    </div>
+                    <p>{entry.artist}{entry.album ? ` · ${entry.album}` : ''}</p>
+                    <div className="submitter-line">
+                      {entry.submitters.map(submitter => (
+                        <span key={submitter.id}>
+                          <Avatar player={submitter} size="sm" />
+                          {playerName(submitter)}
+                        </span>
+                      ))}
+                    </div>
+                    {entry.submitter_note && <p className="note">{entry.submitter_note}</p>}
+                    {entry.isDuplicate && (
+                      <p className="merge-note">
+                        {entry.votePoints} vote pts + {entry.courtesyPoints} courtesy pt{entry.courtesyPoints === 1 ? '' : 's'}
+                        {entry.ineligiblePoints > 0 ? ` · ${entry.ineligiblePoints} self-vote pt${entry.ineligiblePoints === 1 ? '' : 's'} removed` : ''}
+                      </p>
+                    )}
                   </div>
-                  <p>{entry.artist}{entry.album ? ` · ${entry.album}` : ''}</p>
-                  <div className="submitter-line">
-                    {entry.submitters.map(submitter => (
-                      <span key={submitter.id}>
-                        <Avatar player={submitter} size="sm" />
-                        {playerName(submitter)}
-                      </span>
-                    ))}
-                  </div>
-                  {entry.submitter_note && <p className="note">{entry.submitter_note}</p>}
-                  {entry.isDuplicate && (
-                    <p className="merge-note">
-                      {entry.votePoints} vote pts + {entry.courtesyPoints} courtesy pt{entry.courtesyPoints === 1 ? '' : 's'}
-                      {entry.ineligiblePoints > 0 ? ` · ${entry.ineligiblePoints} self-vote pt${entry.ineligiblePoints === 1 ? '' : 's'} removed` : ''}
-                    </p>
-                  )}
+                </div>
+                <div className="score-badge">
+                  <strong>{entry.totalPoints}</strong>
+                  <span>pts</span>
                 </div>
               </div>
-              <div className="score-badge">
-                <strong>{entry.totalPoints}</strong>
-                <span>pts</span>
-              </div>
-            </div>
 
-            <CommentThread
-              comments={commentsForEntry(comments, entry)}
-              player={player}
-              revealAuthors
-              songId={entry.canonical_song_id}
-              onChanged={onChanged}
-              roundId={round.id}
-            />
-          </article>
-        ))
+              <CommentThread
+                comments={commentsForEntry(comments, entry)}
+                player={player}
+                revealAuthors
+                songId={entry.canonical_song_id}
+                onChanged={onChanged}
+                roundId={round.id}
+              />
+            </article>
+          ))}
+        </>
       )}
+    </section>
+  )
+}
+
+function ListeningOrderPanel({ items }) {
+  const [message, setMessage] = useState('')
+
+  async function copyOrder() {
+    try {
+      await navigator.clipboard.writeText(copyTextFor(items))
+      setMessage('Copied')
+    } catch {
+      setMessage('Could not copy')
+    }
+  }
+
+  return (
+    <section className="card listening-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Listening order</p>
+          <h2>Your shuffle</h2>
+        </div>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={copyOrder}>
+          {message || 'Copy list'}
+        </button>
+      </div>
+      <div className="listening-list">
+        {items.map((song, index) => (
+          <div className="listening-row" key={song.id || song.canonical_song_id}>
+            <span className="song-number">{index + 1}</span>
+            <div>
+              <strong>{song.title}</strong>
+              <p>{song.artist}{song.album ? ` · ${song.album}` : ''}</p>
+            </div>
+            <div className="listening-actions">
+              {song.link && <a href={song.link} target="_blank" rel="noreferrer">{serviceLabelForUrl(song.link)}</a>}
+              <a href={searchUrl('spotify', song)} target="_blank" rel="noreferrer">Spotify</a>
+              <a href={searchUrl('tidal', song)} target="_blank" rel="noreferrer">TIDAL</a>
+              <a href={searchUrl('youtube', song)} target="_blank" rel="noreferrer">YouTube</a>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }
