@@ -4,7 +4,6 @@
 // ─────────────────────────────────────────────
 
 const PLAYER_KEY = 'ml_player'
-const SEEN_RESULTS_KEY = 'ml_seen_results'
 
 export function getStoredPlayer() {
   try {
@@ -21,13 +20,4 @@ export function storePlayer(player) {
 
 export function clearPlayer() {
   localStorage.removeItem(PLAYER_KEY)
-}
-
-// Track which round's results the player has already seen
-export function getSeenResultsRoundId() {
-  return localStorage.getItem(SEEN_RESULTS_KEY) || null
-}
-
-export function markResultsSeen(roundId) {
-  localStorage.setItem(SEEN_RESULTS_KEY, roundId)
 }

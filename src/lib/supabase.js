@@ -10,10 +10,8 @@ export const supabase = createClient(
   SUPABASE_ANON_KEY || 'missing-anon-key'
 )
 
-// Season 2 uses a clean Supabase schema. Keep the SQL in SETUP.md in sync with
-// the summary below when changing tables.
+// Season 2 schema changes live in supabase/migrations/.
 //
-// Tables:
 // Env vars:
 // - VITE_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL
 // - VITE_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
