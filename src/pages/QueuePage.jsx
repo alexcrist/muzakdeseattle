@@ -155,7 +155,7 @@ export default function RoundsPage() {
               <input
                 value={form.theme_name}
                 onChange={event => setForm(f => ({ ...f, theme_name: event.target.value }))}
-                placeholder="Songs for a fake movie trailer"
+                placeholder="Name this round"
                 autoFocus
               />
             </label>
@@ -165,7 +165,7 @@ export default function RoundsPage() {
                 value={form.theme_description}
                 onChange={event => setForm(f => ({ ...f, theme_description: event.target.value }))}
                 rows={3}
-                placeholder="Give everyone the prompt."
+                placeholder="Describe the round"
               />
             </label>
             {error && <p className="error-msg">{error}</p>}

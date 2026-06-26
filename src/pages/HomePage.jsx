@@ -363,7 +363,7 @@ function SubmissionView({ round, player, songs, activePlayers, onChanged }) {
               value={form.submitter_note}
               onChange={event => setForm(f => ({ ...f, submitter_note: event.target.value }))}
               rows={3}
-              placeholder="Optional context, campaign speech, or lore."
+              placeholder="Optional note"
             />
           </label>
           {error && <p className="error-msg">{error}</p>}
