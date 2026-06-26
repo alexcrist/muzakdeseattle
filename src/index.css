@@ -639,6 +639,11 @@ select:focus {
   border-color: var(--lemon);
 }
 
+.round-thread-card {
+  border-color: var(--grape);
+  background: linear-gradient(135deg, #fff, var(--grape-soft));
+}
+
 .song-card-main {
   display: flex;
   align-items: flex-start;

@@ -92,7 +92,7 @@ create table votes (
 create table comments (
   id uuid primary key default gen_random_uuid(),
   round_id uuid not null references rounds(id) on delete cascade,
-  song_id uuid not null references songs(id) on delete cascade,
+  song_id uuid references songs(id) on delete cascade,
   player_id uuid not null references players(id) on delete cascade,
   body text not null,
   created_at timestamptz not null default now()
@@ -186,6 +186,12 @@ alter publication supabase_realtime add table
   comments,
   duplicate_groups,
   duplicate_group_songs;
+```
+
+For an existing Season 2 database created before general round comments, run this one-time migration:
+
+```sql
+alter table comments alter column song_id drop not null;
 ```
 
 ## 2. Add Supabase Credentials To Netlify

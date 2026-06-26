@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Avatar from '../components/Avatar.jsx'
 import Countdown from '../components/Countdown.jsx'
 import { usePlayer, useSettings } from '../App.jsx'
+import { anonymousNameFor } from '../lib/anonymousNames.js'
 import { listeningOrderFor } from '../lib/listeningOrder.js'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
 import { formatPacificDate, getLeagueContext, getRoundTiming, PHASES } from '../lib/schedule.js'
@@ -37,6 +38,10 @@ function playerName(player) {
 function commentsForEntry(comments, entry) {
   const ids = new Set(entry.member_song_ids || [entry.canonical_song_id])
   return comments.filter(comment => ids.has(comment.song_id))
+}
+
+function generalComments(comments) {
+  return comments.filter(comment => !comment.song_id)
 }
 
 function serviceLabelForUrl(url = '') {
@@ -376,6 +381,7 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
   const orderedSongs = useMemo(() => (
     listeningOrderFor(songs, { roundId: round.id, playerId: player.id })
   ), [songs, round.id, player.id])
+  const anonymousLabelFor = playerId => anonymousNameFor(round.id, playerId)
 
   useEffect(() => {
     const mine = {}
@@ -435,6 +441,14 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
       </aside>
 
       <section className="song-stack">
+        <RoundThread
+          comments={generalComments(comments)}
+          player={player}
+          revealAuthors={false}
+          anonymousLabelFor={anonymousLabelFor}
+          onChanged={onChanged}
+          roundId={round.id}
+        />
         {songs.length === 0 ? (
           <div className="empty-state">
             <h2>No songs yet</h2>
@@ -477,6 +491,7 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
                     comments={songComments}
                     player={player}
                     revealAuthors={false}
+                    anonymousLabelFor={anonymousLabelFor}
                     songId={song.id}
                     onChanged={onChanged}
                     roundId={round.id}
@@ -512,6 +527,14 @@ function AppreciationView({ round, player, songs, votes, comments, duplicateGrou
           <strong>{winner.totalPoints} pts</strong>
         </section>
       )}
+
+      <RoundThread
+        comments={generalComments(comments)}
+        player={player}
+        revealAuthors
+        onChanged={onChanged}
+        roundId={round.id}
+      />
 
       {entries.length === 0 ? (
         <div className="empty-state">
@@ -571,6 +594,26 @@ function AppreciationView({ round, player, songs, votes, comments, duplicateGrou
   )
 }
 
+function RoundThread({ comments, player, revealAuthors, anonymousLabelFor, roundId, onChanged }) {
+  return (
+    <section className="song-card round-thread-card">
+      <div>
+        <p className="eyebrow">Round thread</p>
+        <h2>General comments</h2>
+      </div>
+      <CommentThread
+        comments={comments}
+        player={player}
+        revealAuthors={revealAuthors}
+        anonymousLabelFor={anonymousLabelFor}
+        songId={null}
+        onChanged={onChanged}
+        roundId={roundId}
+      />
+    </section>
+  )
+}
+
 function ListeningOrderPanel({ items }) {
   const [message, setMessage] = useState('')
 
@@ -615,9 +658,10 @@ function ListeningOrderPanel({ items }) {
   )
 }
 
-function CommentThread({ comments, player, revealAuthors, songId, roundId, onChanged }) {
+function CommentThread({ comments, player, revealAuthors, anonymousLabelFor, songId, roundId, onChanged }) {
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   async function postComment(event) {
     event?.preventDefault()
@@ -625,14 +669,19 @@ function CommentThread({ comments, player, revealAuthors, songId, roundId, onCha
     if (!trimmed) return
 
     setSaving(true)
-    await supabase.from('comments').insert({
+    setError('')
+    const { error: insertError } = await supabase.from('comments').insert({
       round_id: roundId,
-      song_id: songId,
+      song_id: songId || null,
       player_id: player.id,
       body: trimmed,
     })
-    setBody('')
     setSaving(false)
+    if (insertError) {
+      setError('Could not post comment.')
+      return
+    }
+    setBody('')
     onChanged()
   }
 
@@ -642,12 +691,17 @@ function CommentThread({ comments, player, revealAuthors, songId, roundId, onCha
         <div className="comments-list">
           {comments.map(comment => {
             const isMine = comment.player_id === player.id
-            const author = revealAuthors || isMine ? comment.players : null
+            const author = revealAuthors ? comment.players : null
+            const anonymousName = anonymousLabelFor ? anonymousLabelFor(comment.player_id) : 'Anonymous'
             return (
               <div className="comment" key={comment.id}>
-                {author ? <Avatar player={author} size="xs" /> : <span className="anon-avatar">?</span>}
+                {author ? (
+                  <Avatar player={author} size="xs" />
+                ) : (
+                  <Avatar player={{ id: `anon-${roundId}-${comment.player_id}`, name: anonymousName }} size="xs" />
+                )}
                 <div>
-                  <strong>{author ? `${author.name}${isMine ? ' (you)' : ''}` : 'Anonymous'}</strong>
+                  <strong>{author ? `${author.name}${isMine ? ' (you)' : ''}` : `${anonymousName}${isMine ? ' (you)' : ''}`}</strong>
                   <p>{comment.body}</p>
                 </div>
               </div>
@@ -666,6 +720,7 @@ function CommentThread({ comments, player, revealAuthors, songId, roundId, onCha
           Post
         </button>
       </form>
+      {error && <p className="error-msg">{error}</p>}
     </div>
   )
 }
