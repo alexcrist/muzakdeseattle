@@ -176,13 +176,13 @@ export default function RoundsPage() {
         </section>
       )}
 
-      <RoundSection title="Now" rows={current}>
+      <RoundSection title="Now playing" rows={current}>
         {current.map(row => (
           <RoundCard key={row.round.id} row={row} settings={settings} currentPhase={context.phase} />
         ))}
       </RoundSection>
 
-      <RoundSection title="Upcoming" rows={upcoming}>
+      <RoundSection title="Up next" rows={upcoming}>
         {upcoming.map((row, index) => (
           <RoundCard
             key={row.round.id}
@@ -198,7 +198,7 @@ export default function RoundsPage() {
         ))}
       </RoundSection>
 
-      <RoundSection title="History" rows={past}>
+      <RoundSection title="Record crate" rows={past}>
         {past.map(row => (
           <HistoryRound
             key={row.round.id}
@@ -240,6 +240,11 @@ function RoundCard({ row, currentPhase, controls }) {
 
   return (
     <article className={`round-card ${state}`}>
+      <div className="round-artifact" aria-hidden="true">
+        <span />
+        <strong>{state === 'current' ? 'PLAY' : state === 'upcoming' ? 'NEXT' : 'FILE'}</strong>
+        <span />
+      </div>
       <div className="round-card-main">
         <span className={`phase-pill phase-${state === 'current' ? currentPhase : state === 'upcoming' ? 'off' : 'appreciation'}`}>{phaseLabel}</span>
         <h3>{round.theme_name}</h3>

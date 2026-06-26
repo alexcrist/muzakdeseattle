@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
-import { buildLeaderboard } from '../lib/scoring.js'
+import { buildLeaderboard, buildSongEntries } from '../lib/scoring.js'
 import { getLeagueContext, getScoredRoundIds } from '../lib/schedule.js'
 import { supabase } from '../lib/supabase.js'
 
@@ -88,6 +88,22 @@ export default function PlayerListPage() {
     })
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
   const leader = rankedPlayers.find(row => row.total > 0)
+  const latestScoredRound = scoredRounds[scoredRounds.length - 1]
+  const latestWinnerIds = useMemo(() => {
+    if (!latestScoredRound) return new Set()
+    const roundSongs = data.songs.filter(song => song.round_id === latestScoredRound.id)
+    const roundVotes = data.votes.filter(vote => vote.round_id === latestScoredRound.id)
+    const roundGroups = data.groups.filter(group => group.round_id === latestScoredRound.id)
+    const groupIds = new Set(roundGroups.map(group => group.id))
+    const roundGroupSongs = data.groupSongs.filter(row => groupIds.has(row.group_id))
+    const winner = buildSongEntries({
+      songs: roundSongs,
+      votes: roundVotes,
+      duplicateGroups: roundGroups,
+      groupSongs: roundGroupSongs,
+    })[0]
+    return new Set(winner?.submitterIds || [])
+  }, [data, latestScoredRound])
   const activeCount = data.players.filter(row => row.active).length
 
   if (loading) {
@@ -147,6 +163,11 @@ export default function PlayerListPage() {
                 <span className="leader-name">
                   {row.name}{row.id === player.id ? ' (you)' : ''}
                   <small>{submissionCounts[row.id] || 0} submissions{row.active ? '' : ' · inactive'}</small>
+                  <span className="player-badges">
+                    {leader?.id === row.id && row.total > 0 && <em className="badge-leader">Current leader</em>}
+                    {latestWinnerIds.has(row.id) && <em className="badge-winner">Latest winner</em>}
+                    {row.id === player.id && <em className="badge-you">Your scorecard</em>}
+                  </span>
                 </span>
                 <strong>{row.total}</strong>
               </Link>

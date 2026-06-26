@@ -27,7 +27,7 @@ function phaseTitle(phase) {
 function phaseHint(phase) {
   if (phase === 'submission') return 'Songs stay editable until voting starts.'
   if (phase === 'voting') return 'Spend your points before the reveal.'
-  if (phase === 'appreciation') return 'Results are live. Comments and submitters are no longer anonymous.'
+  if (phase === 'appreciation') return 'Masks are off. Results, submitters, and comment authors are live.'
   return 'The next active phase starts at midnight Pacific.'
 }
 
@@ -382,6 +382,7 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
     listeningOrderFor(songs, { roundId: round.id, playerId: player.id })
   ), [songs, round.id, player.id])
   const anonymousLabelFor = playerId => anonymousNameFor(round.id, playerId)
+  const myAnonymousName = anonymousLabelFor(player.id)
 
   useEffect(() => {
     const mine = {}
@@ -435,6 +436,8 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
         <h2>Voting bank</h2>
         <p className="big-stat">{pointsRemaining}</p>
         <p>{pointsRemaining === 0 ? 'All points allocated.' : `${pointsTotal} points available.`}</p>
+        <VoteTokenBank total={pointsTotal} used={pointsUsed} />
+        <AnonymousPersonaCard name={myAnonymousName} />
         <hr />
         <p className="eyebrow">Voters</p>
         <p>{voters.size}/{activePlayers.length} players have voted</p>
@@ -460,8 +463,9 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
             {orderedSongs.map((song, index) => {
               const isOwn = song.player_id === player.id
               const songComments = comments.filter(comment => comment.song_id === song.id)
+              const currentVote = draftVotes[song.id] || 0
               return (
-                <article className={`song-card ${isOwn ? 'is-own' : ''}`} key={song.id}>
+                <article className={`song-card ${isOwn ? 'is-own' : ''} ${currentVote > 0 ? 'has-votes' : ''}`} key={song.id}>
                   <div className="song-card-main">
                     <span className="song-number">{index + 1}</span>
                     <div>
@@ -481,7 +485,7 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
                     ) : (
                       <>
                         <button type="button" className="icon-btn" onClick={() => adjustVote(song, -1)} disabled={(draftVotes[song.id] || 0) <= 0}>−</button>
-                        <strong>{draftVotes[song.id] || 0}</strong>
+                        <strong className="vote-count-pop" key={`${song.id}-${currentVote}`}>{currentVote}</strong>
                         <button type="button" className="icon-btn primary" onClick={() => adjustVote(song, 1)} disabled={pointsRemaining <= 0}>+</button>
                       </>
                     )}
@@ -527,6 +531,8 @@ function AppreciationView({ round, player, songs, votes, comments, duplicateGrou
           <strong>{winner.totalPoints} pts</strong>
         </section>
       )}
+
+      <RevealCeremony entries={entries} comments={comments} />
 
       <RoundThread
         comments={generalComments(comments)}
@@ -594,6 +600,42 @@ function AppreciationView({ round, player, songs, votes, comments, duplicateGrou
   )
 }
 
+function VoteTokenBank({ total, used }) {
+  const tokenCount = Math.max(0, Number(total) || 0)
+  const spentCount = Math.min(tokenCount, Math.max(0, Number(used) || 0))
+  return (
+    <div className={`token-bank ${spentCount >= tokenCount ? 'bank-locked' : ''}`} aria-label={`${tokenCount - spentCount} voting points remaining`}>
+      {Array.from({ length: tokenCount }).map((_, index) => (
+        <span className={`point-token ${index < spentCount ? 'spent' : ''}`} key={index} />
+      ))}
+    </div>
+  )
+}
+
+function AnonymousPersonaCard({ name }) {
+  return (
+    <div className="persona-card">
+      <span className="persona-symbol" aria-hidden="true">?</span>
+      <div>
+        <p className="eyebrow">Comment alias</p>
+        <strong>{name}</strong>
+      </div>
+    </div>
+  )
+}
+
+function RevealCeremony({ entries, comments }) {
+  return (
+    <section className="reveal-ceremony">
+      <span className="phase-pill phase-appreciation">Masks off</span>
+      <div>
+        <h2>The round is revealed</h2>
+        <p>{entries.length} songs · {comments.length} comments · no more mystery names</p>
+      </div>
+    </section>
+  )
+}
+
 function RoundThread({ comments, player, revealAuthors, anonymousLabelFor, roundId, onChanged }) {
   return (
     <section className="song-card round-thread-card">
@@ -630,8 +672,8 @@ function ListeningOrderPanel({ items }) {
     <section className="card listening-panel">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Listening order</p>
-          <h2>Your shuffle</h2>
+          <p className="eyebrow">Personal setlist</p>
+          <h2>Your listening pass</h2>
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={copyOrder}>
           {message || 'Copy list'}
@@ -694,14 +736,14 @@ function CommentThread({ comments, player, revealAuthors, anonymousLabelFor, son
             const author = revealAuthors ? comment.players : null
             const anonymousName = anonymousLabelFor ? anonymousLabelFor(comment.player_id) : 'Anonymous'
             return (
-              <div className="comment" key={comment.id}>
+              <div className={`comment ${author ? '' : 'anonymous-comment'}`} key={comment.id}>
                 {author ? (
                   <Avatar player={author} size="xs" />
                 ) : (
                   <Avatar player={{ id: `anon-${roundId}-${comment.player_id}`, name: anonymousName }} size="xs" />
                 )}
                 <div>
-                  <strong>{author ? `${author.name}${isMine ? ' (you)' : ''}` : `${anonymousName}${isMine ? ' (you)' : ''}`}</strong>
+                  <strong className={author ? '' : 'anon-name'}>{author ? `${author.name}${isMine ? ' (you)' : ''}` : `${anonymousName}${isMine ? ' (you)' : ''}`}</strong>
                   <p>{comment.body}</p>
                 </div>
               </div>
