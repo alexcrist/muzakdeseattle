@@ -194,6 +194,15 @@ For an existing Season 2 database created before general round comments, run thi
 alter table comments alter column song_id drop not null;
 ```
 
+Future schema changes should be added as SQL files in `supabase/migrations/` and applied with the Supabase CLI:
+
+```bash
+npm run db:link -- --project-ref your-project-ref
+npm run db:push
+```
+
+The CLI must be logged in once with `npx supabase login`. Do not commit database passwords or access tokens.
+
 ## 2. Add Supabase Credentials To Netlify
 
 In the new Supabase project, open **Project Settings → API** and copy:
