@@ -65,3 +65,7 @@ Scoring:
 ## Schema
 
 The full Season 2 SQL lives in `SETUP.md`. Keep that setup SQL in sync with table assumptions in code.
+
+## Profile Pictures
+
+Profile pictures use the public Supabase Storage bucket `profile-pictures`. Uploads are resized in the browser before being stored at `players/<player-id>/avatar.webp`, and the resulting public URL is saved to `players.avatar_url`.

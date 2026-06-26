@@ -147,6 +147,36 @@ create policy "public access" on comments for all using (true) with check (true)
 create policy "public access" on duplicate_groups for all using (true) with check (true);
 create policy "public access" on duplicate_group_songs for all using (true) with check (true);
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'profile-pictures',
+  'profile-pictures',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+create policy "public profile pictures read"
+on storage.objects for select
+using (bucket_id = 'profile-pictures');
+
+create policy "public profile pictures insert"
+on storage.objects for insert
+with check (bucket_id = 'profile-pictures');
+
+create policy "public profile pictures update"
+on storage.objects for update
+using (bucket_id = 'profile-pictures')
+with check (bucket_id = 'profile-pictures');
+
+create policy "public profile pictures delete"
+on storage.objects for delete
+using (bucket_id = 'profile-pictures');
+
 alter publication supabase_realtime add table
   players,
   league_settings,

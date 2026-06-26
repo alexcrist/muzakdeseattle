@@ -30,3 +30,6 @@ export const supabase = createClient(
 // - comments(id, round_id, song_id, player_id, body, created_at)
 // - duplicate_groups(id, round_id, canonical_song_id, label, created_at, updated_at)
 // - duplicate_group_songs(id, group_id, song_id, created_at)
+//
+// Storage:
+// - public bucket profile-pictures

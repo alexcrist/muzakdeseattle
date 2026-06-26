@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
+import { uploadProfilePicture } from '../lib/profilePictures.js'
 import { buildLeaderboard } from '../lib/scoring.js'
 import { getScoredRoundIds } from '../lib/schedule.js'
 import { supabase } from '../lib/supabase.js'
@@ -39,6 +40,7 @@ export default function PlayerListPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState({ name: player.name, avatar_url: player.avatar_url || '' })
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
 
   async function load() {
@@ -109,6 +111,36 @@ export default function PlayerListPage() {
     load()
   }
 
+  async function handlePictureUpload(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setUploading(true)
+    setMessage('')
+
+    try {
+      const avatarUrl = await uploadProfilePicture(player.id, file)
+      const { data: updated, error } = await supabase
+        .from('players')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', player.id)
+        .select()
+        .single()
+
+      if (error || !updated) throw new Error('Uploaded, but could not save the profile picture.')
+
+      setPlayer(updated)
+      setProfile(p => ({ ...p, avatar_url: updated.avatar_url || '' }))
+      setMessage('Profile picture uploaded.')
+      load()
+    } catch (error) {
+      setMessage(error.message || 'Could not upload that picture.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   async function toggleActive(row) {
     await supabase.from('players').update({ active: !row.active }).eq('id', row.id)
     load()
@@ -150,18 +182,38 @@ export default function PlayerListPage() {
               <input value={profile.name} onChange={event => setProfile(p => ({ ...p, name: event.target.value }))} />
             </label>
             <label>
-              <span>Profile image URL</span>
+              <span>Upload profile picture</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={handlePictureUpload}
+                disabled={uploading}
+              />
+            </label>
+          </div>
+          <label>
+            <span>Profile image URL</span>
+            <div className="inline-field">
               <input
                 type="url"
                 value={profile.avatar_url}
                 onChange={event => setProfile(p => ({ ...p, avatar_url: event.target.value }))}
-                placeholder="https://..."
+                placeholder="Upload a picture, or paste a public image URL"
               />
-            </label>
-          </div>
-          {message && <p className={message.includes('Could not') ? 'error-msg' : 'success-msg'}>{message}</p>}
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : 'Save profile'}
+              {profile.avatar_url && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setProfile(p => ({ ...p, avatar_url: '' }))}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </label>
+          {message && <p className={message.includes('Could not') || message.includes('Choose') || message.includes('under') || message.includes('Uploaded, but') ? 'error-msg' : 'success-msg'}>{message}</p>}
+          <button type="submit" className="btn btn-primary" disabled={saving || uploading}>
+            {uploading ? 'Uploading...' : saving ? 'Saving...' : 'Save profile'}
           </button>
         </form>
       </section>
