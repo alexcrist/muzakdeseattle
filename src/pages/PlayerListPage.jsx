@@ -93,7 +93,7 @@ export default function PlayerListPage() {
         <div>
           <p className="eyebrow">Profiles</p>
           <h1>Players</h1>
-          <p>Pick a player to see their profile and revealed songs.</p>
+          <p>Pick a player to see their profile and songs.</p>
         </div>
       </section>
 
@@ -131,7 +131,7 @@ function PlayerSection({ title, players, currentPlayerId, scoreMap, submissionCo
             <Avatar player={player} />
             <div>
               <h3>{player.name}{player.id === currentPlayerId ? ' (you)' : ''}</h3>
-              <p>{submissionCounts[player.id] || 0} revealed submissions · {scoreMap[player.id] || 0} pts</p>
+              <p>{submissionCounts[player.id] || 0} submissions · {scoreMap[player.id] || 0} pts</p>
             </div>
             <span className="soft-tag">View</span>
           </Link>

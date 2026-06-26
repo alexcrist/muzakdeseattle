@@ -121,7 +121,7 @@ export default function PlayerPage() {
   }, [data, scoredRoundIds, settings, viewedPlayer])
 
   const score = leaderboard.find(row => row.id === playerId)?.total || 0
-  const revealedSubmissionCount = submissions.length
+  const submissionCount = submissions.length
 
   async function saveProfile(event) {
     event.preventDefault()
@@ -243,7 +243,7 @@ export default function PlayerPage() {
           </div>
           <div className="player-profile-tags">
             <span className="soft-tag">{displayPlayer.active ? 'Active' : 'Inactive'}</span>
-            <span className="soft-tag">{submissions.length} revealed songs</span>
+            <span className="soft-tag">{submissions.length} submissions</span>
           </div>
         </div>
         <div className="player-profile-stats" aria-label="Player stats">
@@ -252,8 +252,8 @@ export default function PlayerPage() {
             <small>pts</small>
           </span>
           <span>
-            <strong>{revealedSubmissionCount}</strong>
-            <small>revealed</small>
+            <strong>{submissionCount}</strong>
+            <small>submissions</small>
           </span>
         </div>
       </section>
@@ -299,12 +299,12 @@ export default function PlayerPage() {
 
       <section className="round-section">
         <div className="section-heading">
-          <h2>Revealed submissions</h2>
+          <h2>Submissions</h2>
           <span className="soft-tag">{submissions.length}</span>
         </div>
         {submissions.length === 0 ? (
           <div className="empty-state compact">
-            <p>No revealed submissions yet.</p>
+            <p>No submissions yet.</p>
           </div>
         ) : (
           <div className="song-stack">
