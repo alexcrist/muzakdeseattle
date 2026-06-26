@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
@@ -17,6 +17,7 @@ import {
 import { supabase } from '../lib/supabase.js'
 
 const PHASE_OPTIONS = ['submission', 'voting', 'appreciation', 'off']
+const ADMIN_UNLOCK_THRESHOLD = 86
 
 async function fetchAdminData() {
   const [
@@ -50,6 +51,7 @@ export default function AdminPage() {
   const { settings, setSettings } = useSettings()
   const [data, setData] = useState({ rounds: [], songs: [], votes: [], groups: [], groupSongs: [], players: [] })
   const [loading, setLoading] = useState(true)
+  const [adminUnlocked, setAdminUnlocked] = useState(false)
   const [form, setForm] = useState({
     league_name: settings?.league_name || 'Muzak de Seattle',
     season_label: settings?.season_label || 'Season 2',
@@ -144,63 +146,186 @@ export default function AdminPage() {
       </section>
 
       <section className="warning-panel loud">
-        <strong>No auth, no undo button</strong>
-        <p>This league intentionally trusts the room. Settings, duplicate song merges, and player status are public controls.</p>
+        <strong>Hear be dragons</strong>
+        <p>Past this sign are public controls that can move the season, merge songs, and bench players. Wake them only when you mean it.</p>
       </section>
 
-      <DuplicateMergeTool settings={settings} data={data} onChanged={load} />
+      {!adminUnlocked ? (
+        <AdminUnlock onUnlock={() => setAdminUnlocked(true)} />
+      ) : (
+        <>
+          <DuplicateMergeTool settings={settings} data={data} onChanged={load} />
 
-      <section className="card admin-settings">
-        <div className="section-heading">
-          <h2>League settings</h2>
-          {message && <span className={message.includes('Could not') ? 'error-msg' : 'success-msg'}>{message}</span>}
-        </div>
+          <section className="card admin-settings">
+            <div className="section-heading">
+              <h2>League settings</h2>
+              {message && <span className={message.includes('Could not') ? 'error-msg' : 'success-msg'}>{message}</span>}
+            </div>
 
-        <form className="stack" onSubmit={saveSettings}>
-          <div className="form-row">
-            <label>
-              <span>League name</span>
-              <input value={form.league_name} onChange={event => setForm(f => ({ ...f, league_name: event.target.value }))} />
-            </label>
-            <label>
-              <span>Season label</span>
-              <input value={form.season_label} onChange={event => setForm(f => ({ ...f, season_label: event.target.value }))} />
-            </label>
-          </div>
+            <form className="stack" onSubmit={saveSettings}>
+              <div className="form-row">
+                <label>
+                  <span>League name</span>
+                  <input value={form.league_name} onChange={event => setForm(f => ({ ...f, league_name: event.target.value }))} />
+                </label>
+                <label>
+                  <span>Season label</span>
+                  <input value={form.season_label} onChange={event => setForm(f => ({ ...f, season_label: event.target.value }))} />
+                </label>
+              </div>
 
-          <div className="form-row">
-            <label>
-              <span>Points per player</span>
-              <input
-                type="number"
-                min="1"
-                max="100"
-                value={form.points_per_player}
-                onChange={event => setForm(f => ({ ...f, points_per_player: event.target.value }))}
+              <div className="form-row">
+                <label>
+                  <span>Points per player</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={form.points_per_player}
+                    onChange={event => setForm(f => ({ ...f, points_per_player: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span>Schedule start Monday</span>
+                  <input
+                    type="date"
+                    value={form.schedule_start_date}
+                    onChange={event => setForm(f => ({ ...f, schedule_start_date: event.target.value }))}
+                  />
+                </label>
+              </div>
+
+              <ScheduleEditor
+                template={form.weekly_phase_template}
+                onChange={weekly_phase_template => setForm(f => ({ ...f, weekly_phase_template }))}
               />
-            </label>
-            <label>
-              <span>Schedule start Monday</span>
-              <input
-                type="date"
-                value={form.schedule_start_date}
-                onChange={event => setForm(f => ({ ...f, schedule_start_date: event.target.value }))}
-              />
-            </label>
-          </div>
 
-          <ScheduleEditor
-            template={form.weekly_phase_template}
-            onChange={weekly_phase_template => setForm(f => ({ ...f, weekly_phase_template }))}
-          />
+              <button type="submit" className="btn btn-primary">Save settings</button>
+            </form>
+          </section>
 
-          <button type="submit" className="btn btn-primary">Save settings</button>
-        </form>
-      </section>
-
-      <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={load} />
+          <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={load} />
+        </>
+      )}
 
     </main>
+  )
+}
+
+function AdminUnlock({ onUnlock }) {
+  const trackRef = useRef(null)
+  const draggingRef = useRef(false)
+  const [dragPercent, setDragPercent] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+
+  function percentFromClientX(clientX) {
+    const track = trackRef.current
+    if (!track) return 0
+
+    const rect = track.getBoundingClientRect()
+    const x = Math.min(Math.max(clientX - rect.left, 0), rect.width)
+    return Math.round((x / rect.width) * 100)
+  }
+
+  function updateDrag(clientX) {
+    setDragPercent(percentFromClientX(clientX))
+  }
+
+  function beginDrag(event) {
+    draggingRef.current = true
+    setIsDragging(true)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    updateDrag(event.clientX)
+  }
+
+  function moveDrag(event) {
+    if (!draggingRef.current) return
+    updateDrag(event.clientX)
+  }
+
+  function endDrag(event) {
+    if (!draggingRef.current) return
+
+    draggingRef.current = false
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+
+    const nextPercent = percentFromClientX(event.clientX)
+    if (nextPercent >= ADMIN_UNLOCK_THRESHOLD) {
+      setDragPercent(100)
+      onUnlock()
+      return
+    }
+
+    setIsDragging(false)
+    setDragPercent(0)
+  }
+
+  function cancelDrag() {
+    draggingRef.current = false
+    setIsDragging(false)
+    setDragPercent(0)
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      setDragPercent(value => Math.min(100, value + 20))
+    }
+
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      setDragPercent(value => Math.max(0, value - 20))
+    }
+
+    if ((event.key === 'Enter' || event.key === ' ') && dragPercent >= ADMIN_UNLOCK_THRESHOLD) {
+      event.preventDefault()
+      onUnlock()
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setDragPercent(0)
+    }
+  }
+
+  return (
+    <section className="card admin-unlock">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Admin gate</p>
+          <h2>Drag to unlock</h2>
+        </div>
+        <span className="soft-tag">{dragPercent}%</span>
+      </div>
+      <div
+        ref={trackRef}
+        className={`drag-unlock ${isDragging ? 'dragging' : ''}`}
+        role="slider"
+        tabIndex={0}
+        aria-label="Unlock admin controls"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={dragPercent}
+        onKeyDown={handleKeyDown}
+      >
+        <div className="drag-unlock-fill" style={{ width: `${dragPercent}%` }} />
+        <span className="drag-unlock-label">{dragPercent >= ADMIN_UNLOCK_THRESHOLD ? 'Release to enter' : 'Pull the record'}</span>
+        <button
+          type="button"
+          className="drag-unlock-handle"
+          style={{ left: `${dragPercent}%`, transform: `translate(${-dragPercent}%, -50%)` }}
+          onPointerDown={beginDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={cancelDrag}
+          aria-label="Drag unlock handle"
+          tabIndex={-1}
+        >
+          <span />
+        </button>
+      </div>
+      <p className="muted">A short pull keeps the admin controls out of casual reach.</p>
+    </section>
   )
 }
 
@@ -371,24 +496,16 @@ function DuplicateMergeTool({ settings, data, onChanged }) {
       ? canonicalSongId
       : selectedSongIds[0]
 
-    const { data: group, error } = await supabase
-      .from('duplicate_groups')
-      .insert({
-        round_id: selectedRoundId,
-        canonical_song_id: canonical,
-        label: 'Duplicate submission',
-      })
-      .select()
-      .single()
+    const { error } = await supabase.rpc('create_duplicate_merge', {
+      p_round_id: selectedRoundId,
+      p_song_ids: selectedSongIds,
+      p_canonical_song_id: canonical,
+    })
 
-    if (error || !group) {
-      setMessage('Could not create duplicate merge.')
+    if (error) {
+      setMessage(error.message || 'Could not create duplicate merge.')
       return
     }
-
-    await supabase.from('duplicate_group_songs').insert(
-      selectedSongIds.map(songId => ({ group_id: group.id, song_id: songId }))
-    )
 
     setSelectedSongIds([])
     setCanonicalSongId('')

@@ -79,7 +79,7 @@ export default function App() {
         if (data?.active) {
           storePlayer(data)
           if (mounted) setPlayer(data)
-        } else if (!data) {
+        } else {
           clearPlayer()
           if (mounted) setPlayer(null)
         }
@@ -104,14 +104,52 @@ export default function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!isSupabaseConfigured || !player?.id) return undefined
+
+    const channel = supabase
+      .channel(`player-session-season-2-${player.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `id=eq.${player.id}` }, payload => {
+        const nextPlayer = payload.new
+        if (payload.eventType === 'DELETE' || !nextPlayer?.active) {
+          clearPlayer()
+          setPlayer(null)
+          return
+        }
+
+        storePlayer(nextPlayer)
+        setPlayer(nextPlayer)
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [player?.id])
+
   function handleJoin(nextPlayer) {
+    if (!nextPlayer?.active) {
+      clearPlayer()
+      setPlayer(null)
+      return
+    }
+
     storePlayer(nextPlayer)
     setPlayer(nextPlayer)
   }
 
   function handlePlayerUpdate(nextPlayer) {
+    if (!nextPlayer?.active) {
+      clearPlayer()
+      setPlayer(null)
+      return
+    }
+
     storePlayer(nextPlayer)
     setPlayer(nextPlayer)
+  }
+
+  function handleLogout() {
+    clearPlayer()
+    setPlayer(null)
   }
 
   if (!isSupabaseConfigured) return <SetupRequired />
@@ -134,7 +172,7 @@ export default function App() {
   }
 
   return (
-    <PlayerContext.Provider value={{ player, setPlayer: handlePlayerUpdate }}>
+    <PlayerContext.Provider value={{ player, setPlayer: handlePlayerUpdate, logout: handleLogout }}>
       <SettingsContext.Provider value={{ settings, setSettings }}>
         <BrowserRouter>
           <Routes>

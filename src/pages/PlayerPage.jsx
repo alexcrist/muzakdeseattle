@@ -36,13 +36,14 @@ async function fetchPlayerPageData() {
 
 export default function PlayerPage() {
   const { playerId } = useParams()
-  const { player, setPlayer } = usePlayer()
+  const { player, setPlayer, logout } = usePlayer()
   const { settings } = useSettings()
   const [data, setData] = useState({ players: [], rounds: [], songs: [], votes: [], groups: [], groupSongs: [] })
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState({ name: player.name, avatar_url: player.avatar_url || '' })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [message, setMessage] = useState('')
 
   async function load() {
@@ -146,6 +147,7 @@ export default function PlayerPage() {
 
     setPlayer(updated)
     setMessage('Profile saved.')
+    setIsEditingProfile(false)
     load()
   }
 
@@ -169,6 +171,7 @@ export default function PlayerPage() {
     setPlayer(updated)
     setProfile(p => ({ ...p, avatar_url: '' }))
     setMessage('Profile picture removed.')
+    setIsEditingProfile(false)
     load()
   }
 
@@ -194,6 +197,7 @@ export default function PlayerPage() {
       setPlayer(updated)
       setProfile(p => ({ ...p, avatar_url: updated.avatar_url || '' }))
       setMessage('Profile picture uploaded.')
+      setIsEditingProfile(false)
       load()
     } catch (error) {
       setMessage(error.message || 'Could not upload that picture.')
@@ -223,6 +227,19 @@ export default function PlayerPage() {
   }
 
   const displayPlayer = isSelf ? { ...viewedPlayer, ...player } : viewedPlayer
+  const messageIsError = message.includes('Could not') || message.includes('Choose') || message.includes('under') || message.includes('Uploaded, but')
+
+  function openProfileEditor() {
+    setProfile({ name: player.name, avatar_url: player.avatar_url || '' })
+    setMessage('')
+    setIsEditingProfile(true)
+  }
+
+  function closeProfileEditor() {
+    setProfile({ name: player.name, avatar_url: player.avatar_url || '' })
+    setMessage('')
+    setIsEditingProfile(false)
+  }
 
   return (
     <main className="page">
@@ -245,6 +262,19 @@ export default function PlayerPage() {
             <span className="soft-tag">{displayPlayer.active ? 'Active' : 'Inactive'}</span>
             <span className="soft-tag">{submissions.length} submissions</span>
           </div>
+          {isSelf && (
+            <div className="profile-actions">
+              {!isEditingProfile && (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={openProfileEditor}>
+                  Edit profile
+                </button>
+              )}
+              <button type="button" className="btn btn-secondary btn-sm" onClick={logout} disabled={saving || uploading}>
+                Log out
+              </button>
+              {message && <span className={messageIsError ? 'error-msg' : 'success-msg'}>{message}</span>}
+            </div>
+          )}
         </div>
         <div className="player-profile-stats" aria-label="Player stats">
           <span>
@@ -258,11 +288,13 @@ export default function PlayerPage() {
         </div>
       </section>
 
-      {isSelf && (
+      {isSelf && isEditingProfile && (
         <section className="profile-editor card">
           <div className="section-heading">
             <h2>Edit profile</h2>
-            {message && <span className={message.includes('Could not') || message.includes('Choose') || message.includes('under') || message.includes('Uploaded, but') ? 'error-msg' : 'success-msg'}>{message}</span>}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={closeProfileEditor} disabled={saving || uploading}>
+              Close
+            </button>
           </div>
           <form className="stack" onSubmit={saveProfile}>
             <div className="form-row">
@@ -290,9 +322,14 @@ export default function PlayerPage() {
                 Remove profile picture
               </button>
             )}
-            <button type="submit" className="btn btn-primary" disabled={saving || uploading}>
-              {uploading ? 'Uploading...' : saving ? 'Saving...' : 'Save profile'}
-            </button>
+            <div className="profile-editor-actions">
+              <button type="button" className="btn btn-secondary" onClick={closeProfileEditor} disabled={saving || uploading}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={saving || uploading}>
+                {uploading ? 'Uploading...' : saving ? 'Saving...' : 'Save profile'}
+              </button>
+            </div>
           </form>
         </section>
       )}

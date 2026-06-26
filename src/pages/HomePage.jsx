@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Avatar from '../components/Avatar.jsx'
 import Countdown from '../components/Countdown.jsx'
 import { usePlayer, useSettings } from '../App.jsx'
@@ -378,6 +378,11 @@ function SubmissionView({ round, player, songs, activePlayers, onChanged }) {
 
 function VotingView({ round, player, songs, votes, comments, activePlayers, pointsTotal, onChanged }) {
   const [draftVotes, setDraftVotes] = useState({})
+  const [savingVotes, setSavingVotes] = useState(false)
+  const [voteError, setVoteError] = useState('')
+  const draftVotesRef = useRef({})
+  const voteSaveTimersRef = useRef({})
+  const pendingVoteValuesRef = useRef({})
   const orderedSongs = useMemo(() => (
     listeningOrderFor(songs, { roundId: round.id, playerId: player.id })
   ), [songs, round.id, player.id])
@@ -385,49 +390,98 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
   const myAnonymousName = anonymousLabelFor(player.id)
 
   useEffect(() => {
+    if (Object.keys(voteSaveTimersRef.current).length > 0) return
+
     const mine = {}
     votes
       .filter(vote => vote.voter_player_id === player.id)
       .forEach(vote => {
         mine[vote.song_id] = vote.points
       })
+    draftVotesRef.current = mine
     setDraftVotes(mine)
   }, [votes, player.id])
+
+  useEffect(() => () => {
+    Object.values(voteSaveTimersRef.current).forEach(timer => window.clearTimeout(timer))
+    Object.entries(pendingVoteValuesRef.current).forEach(([songId, points]) => {
+      persistVote(songId, points).catch(() => {})
+    })
+  }, [])
 
   const pointsUsed = Object.values(draftVotes).reduce((sum, value) => sum + (Number(value) || 0), 0)
   const pointsRemaining = pointsTotal - pointsUsed
   const voters = new Set(votes.filter(vote => Number(vote.points) > 0).map(vote => vote.voter_player_id))
+  if (pointsUsed > 0) voters.add(player.id)
+  if (pointsUsed === 0 && Object.keys(voteSaveTimersRef.current).length > 0) voters.delete(player.id)
 
-  async function adjustVote(song, delta) {
+  async function persistVote(songId, points) {
+    if (points === 0) {
+      const { error } = await supabase
+        .from('votes')
+        .delete()
+        .eq('round_id', round.id)
+        .eq('song_id', songId)
+        .eq('voter_player_id', player.id)
+      if (error) throw error
+      return
+    }
+
+    const { error } = await supabase
+      .from('votes')
+      .upsert({
+        round_id: round.id,
+        song_id: songId,
+        voter_player_id: player.id,
+        points,
+      }, { onConflict: 'song_id,voter_player_id' })
+
+    if (error) throw error
+  }
+
+  function scheduleVoteWrite(songId, points) {
+    if (voteSaveTimersRef.current[songId]) {
+      window.clearTimeout(voteSaveTimersRef.current[songId])
+    }
+
+    setSavingVotes(true)
+    setVoteError('')
+    pendingVoteValuesRef.current[songId] = points
+    voteSaveTimersRef.current[songId] = window.setTimeout(async () => {
+      delete voteSaveTimersRef.current[songId]
+
+      try {
+        await persistVote(songId, pendingVoteValuesRef.current[songId])
+        delete pendingVoteValuesRef.current[songId]
+        onChanged()
+      } catch {
+        setVoteError('Could not save votes. Try again.')
+      } finally {
+        if (Object.keys(voteSaveTimersRef.current).length === 0) {
+          setSavingVotes(false)
+        }
+      }
+    }, 350)
+  }
+
+  function adjustVote(song, delta) {
     if (song.player_id === player.id) return
 
-    const current = Number(draftVotes[song.id]) || 0
-    const usedElsewhere = Object.entries(draftVotes)
+    const currentDraft = draftVotesRef.current
+    const current = Number(currentDraft[song.id]) || 0
+    const usedElsewhere = Object.entries(currentDraft)
       .filter(([songId]) => songId !== song.id)
       .reduce((sum, [, points]) => sum + (Number(points) || 0), 0)
     const next = Math.max(0, Math.min(current + delta, pointsTotal - usedElsewhere))
     if (next === current) return
 
-    setDraftVotes(prev => ({ ...prev, [song.id]: next }))
+    const nextDraft = { ...currentDraft }
+    if (next === 0) delete nextDraft[song.id]
+    else nextDraft[song.id] = next
 
-    if (next === 0) {
-      await supabase
-        .from('votes')
-        .delete()
-        .eq('round_id', round.id)
-        .eq('song_id', song.id)
-        .eq('voter_player_id', player.id)
-    } else {
-      await supabase
-        .from('votes')
-        .upsert({
-          round_id: round.id,
-          song_id: song.id,
-          voter_player_id: player.id,
-          points: next,
-        }, { onConflict: 'song_id,voter_player_id' })
-    }
-    onChanged()
+    draftVotesRef.current = nextDraft
+    setDraftVotes(nextDraft)
+    scheduleVoteWrite(song.id, next)
   }
 
   return (
@@ -437,6 +491,8 @@ function VotingView({ round, player, songs, votes, comments, activePlayers, poin
         <p className="big-stat">{pointsRemaining}</p>
         <p>{pointsRemaining === 0 ? 'All points allocated.' : `${pointsTotal} points available.`}</p>
         <VoteTokenBank total={pointsTotal} used={pointsUsed} />
+        {savingVotes && <p className="muted">Saving votes...</p>}
+        {voteError && <p className="error-msg">{voteError}</p>}
         <AnonymousPersonaCard name={myAnonymousName} />
         <hr />
         <p className="eyebrow">Voters</p>
