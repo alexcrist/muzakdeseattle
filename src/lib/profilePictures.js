@@ -63,7 +63,7 @@ export async function uploadProfilePicture(playerId, file) {
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, blob, {
-      cacheControl: '3600',
+      cacheControl: '31536000',
       contentType: blob.type,
       upsert: true,
     })

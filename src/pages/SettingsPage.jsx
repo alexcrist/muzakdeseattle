@@ -145,10 +145,10 @@ export default function AdminPage() {
 
       <section className="warning-panel loud">
         <strong>No auth, no undo button</strong>
-        <p>This league intentionally trusts the room. Settings, player status, and duplicate merges are public controls.</p>
+        <p>This league intentionally trusts the room. Settings, duplicate song merges, and player status are public controls.</p>
       </section>
 
-      <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={load} />
+      <DuplicateMergeTool settings={settings} data={data} onChanged={load} />
 
       <section className="card admin-settings">
         <div className="section-heading">
@@ -198,7 +198,7 @@ export default function AdminPage() {
         </form>
       </section>
 
-      <DuplicateMergeTool settings={settings} data={data} onChanged={load} />
+      <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={load} />
 
     </main>
   )
@@ -405,7 +405,7 @@ function DuplicateMergeTool({ settings, data, onChanged }) {
   return (
     <section className="card duplicate-tool">
       <div className="section-heading">
-        <h2>Duplicate merge</h2>
+        <h2>Duplicate song merge</h2>
         {message && <span className={message.includes('Could not') || message.includes('Pick') ? 'error-msg' : 'success-msg'}>{message}</span>}
       </div>
       <p className="muted">Use this after voting. Votes stay intact; results recalculate with self-votes removed and courtesy points added.</p>
