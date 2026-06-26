@@ -46,7 +46,7 @@ export default function JoinScreen({ onJoin }) {
 
     if (existing) {
       if (!existing.active) {
-        setError('That profile is inactive. Ask someone in Admin to reactivate it.')
+        setError('That profile is inactive.')
         setLoading(false)
         return
       }

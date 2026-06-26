@@ -9,6 +9,7 @@ import HomePage from './pages/HomePage.jsx'
 import JoinScreen from './pages/JoinScreen.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import Nav from './components/Nav.jsx'
+import PlayerPage from './pages/PlayerPage.jsx'
 import PlayerListPage from './pages/PlayerListPage.jsx'
 import RoundsPage from './pages/QueuePage.jsx'
 
@@ -142,6 +143,7 @@ export default function App() {
             <Route path="/rounds" element={<RoundsPage />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/players" element={<PlayerListPage />} />
+            <Route path="/players/:playerId" element={<PlayerPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/queue" element={<Navigate to="/rounds" replace />} />
             <Route path="/archive" element={<Navigate to="/rounds" replace />} />

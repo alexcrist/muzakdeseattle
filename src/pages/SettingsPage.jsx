@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSettings } from '../App.jsx'
+import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
 import {
@@ -25,12 +25,14 @@ async function fetchAdminData() {
     { data: votes },
     { data: groups },
     { data: groupSongs },
+    { data: players },
   ] = await Promise.all([
     supabase.from('rounds').select('*').order('queue_position'),
     supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)').order('created_at'),
     supabase.from('votes').select('*'),
     supabase.from('duplicate_groups').select('*').order('created_at'),
     supabase.from('duplicate_group_songs').select('*'),
+    supabase.from('players').select('*').order('name'),
   ])
 
   return {
@@ -39,12 +41,14 @@ async function fetchAdminData() {
     votes: votes || [],
     groups: groups || [],
     groupSongs: groupSongs || [],
+    players: players || [],
   }
 }
 
 export default function AdminPage() {
+  const { player } = usePlayer()
   const { settings, setSettings } = useSettings()
-  const [data, setData] = useState({ rounds: [], songs: [], votes: [], groups: [], groupSongs: [] })
+  const [data, setData] = useState({ rounds: [], songs: [], votes: [], groups: [], groupSongs: [], players: [] })
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
     league_name: settings?.league_name || 'Muzak de Seattle',
@@ -70,6 +74,7 @@ export default function AdminPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, load)
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [])
@@ -143,6 +148,8 @@ export default function AdminPage() {
         <p>This league intentionally trusts the room. Settings, player status, and duplicate merges are public controls.</p>
       </section>
 
+      <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={load} />
+
       <section className="card admin-settings">
         <div className="section-heading">
           <h2>League settings</h2>
@@ -194,6 +201,90 @@ export default function AdminPage() {
       <DuplicateMergeTool settings={settings} data={data} onChanged={load} />
 
     </main>
+  )
+}
+
+function PlayerStatusTool({ players, currentPlayerId, onChanged }) {
+  const [message, setMessage] = useState('')
+  const active = players.filter(row => row.active)
+  const inactive = players.filter(row => !row.active)
+
+  async function toggleActive(row) {
+    const { error } = await supabase
+      .from('players')
+      .update({ active: !row.active })
+      .eq('id', row.id)
+
+    if (error) {
+      setMessage('Could not update player status.')
+      return
+    }
+
+    setMessage(`${row.name} ${row.active ? 'deactivated' : 'reactivated'}.`)
+    onChanged()
+  }
+
+  return (
+    <section className="card player-status-tool">
+      <div className="section-heading">
+        <h2>Player controls</h2>
+        {message && <span className={message.includes('Could not') ? 'error-msg' : 'success-msg'}>{message}</span>}
+      </div>
+      <div className="admin-player-columns">
+        <AdminPlayerList
+          title="Active"
+          players={active}
+          currentPlayerId={currentPlayerId}
+          actionLabel="Deactivate"
+          onToggle={toggleActive}
+        />
+        <AdminPlayerList
+          title="Inactive"
+          players={inactive}
+          currentPlayerId={currentPlayerId}
+          actionLabel="Reactivate"
+          onToggle={toggleActive}
+        />
+      </div>
+    </section>
+  )
+}
+
+function AdminPlayerList({ title, players, currentPlayerId, actionLabel, onToggle }) {
+  return (
+    <div className="admin-player-list">
+      <div className="section-heading compact">
+        <h3>{title}</h3>
+        <span className="soft-tag">{players.length}</span>
+      </div>
+      {players.length === 0 ? (
+        <div className="empty-state compact">
+          <p>No {title.toLowerCase()} players.</p>
+        </div>
+      ) : (
+        <div className="player-list">
+          {players.map(player => {
+            const isSelf = player.id === currentPlayerId
+            return (
+              <div className={`admin-player-row ${player.active ? '' : 'inactive'}`} key={player.id}>
+                <Avatar player={player} />
+                <div>
+                  <strong>{player.name}{isSelf ? ' (you)' : ''}</strong>
+                  <p>{player.active ? 'Active' : 'Inactive'}</p>
+                </div>
+                {isSelf ? (
+                  <span className="soft-tag">Current</span>
+                ) : (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => onToggle(player)}>
+                    {actionLabel}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
