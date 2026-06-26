@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Avatar from '../components/Avatar.jsx'
 import Countdown from '../components/Countdown.jsx'
 import { usePlayer, useSettings } from '../App.jsx'
+import useDebouncedVotes from '../hooks/useDebouncedVotes.js'
+import useRealtimeData from '../hooks/useRealtimeData.js'
 import { anonymousNameFor } from '../lib/anonymousNames.js'
+import { EMPTY_HOME_DATA, fetchHomeData, HOME_REALTIME_TABLES } from '../lib/data.js'
 import { listeningOrderFor } from '../lib/listeningOrder.js'
+import { postComment as saveComment, saveSongSubmission } from '../lib/mutations.js'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
 import { formatPacificDate, getLeagueContext, getRoundTiming, PHASES } from '../lib/schedule.js'
-import { supabase } from '../lib/supabase.js'
 
 function useNow() {
   const [now, setNow] = useState(new Date())
@@ -80,72 +83,16 @@ function copyTextFor(items) {
     .join('\n')
 }
 
-async function fetchHomeData() {
-  const [
-    { data: rounds },
-    { data: players },
-    { data: songs },
-    { data: votes },
-    { data: comments },
-    { data: duplicateGroups },
-    { data: groupSongs },
-  ] = await Promise.all([
-    supabase.from('rounds').select('*, players(id, name, avatar_url, avatar_color)').order('queue_position'),
-    supabase.from('players').select('*').order('name'),
-    supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)').order('created_at'),
-    supabase.from('votes').select('*'),
-    supabase.from('comments').select('*, players(id, name, avatar_url, avatar_color)').order('created_at'),
-    supabase.from('duplicate_groups').select('*'),
-    supabase.from('duplicate_group_songs').select('*'),
-  ])
-
-  return {
-    rounds: rounds || [],
-    players: players || [],
-    songs: songs || [],
-    votes: votes || [],
-    comments: comments || [],
-    duplicateGroups: duplicateGroups || [],
-    groupSongs: groupSongs || [],
-  }
-}
-
 export default function HomePage() {
   const { player } = usePlayer()
   const { settings } = useSettings()
   const now = useNow()
-  const [data, setData] = useState({
-    rounds: [],
-    players: [],
-    songs: [],
-    votes: [],
-    comments: [],
-    duplicateGroups: [],
-    groupSongs: [],
+  const { data, loading, reload } = useRealtimeData({
+    channelName: 'home-season-2',
+    fetcher: fetchHomeData,
+    initialData: EMPTY_HOME_DATA,
+    tables: HOME_REALTIME_TABLES,
   })
-  const [loading, setLoading] = useState(true)
-
-  async function load() {
-    const next = await fetchHomeData()
-    setData(next)
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    load()
-    const channel = supabase
-      .channel('home-season-2')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, load)
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
-  }, [])
 
   const context = useMemo(() => getLeagueContext(data.rounds, settings, now), [data.rounds, settings, now])
   const currentRound = context.currentRound
@@ -220,7 +167,7 @@ export default function HomePage() {
           player={player}
           songs={roundData.roundSongs}
           activePlayers={activePlayers}
-          onChanged={load}
+          onChanged={reload}
         />
       )}
 
@@ -233,7 +180,7 @@ export default function HomePage() {
           comments={roundData.roundComments}
           activePlayers={activePlayers}
           pointsTotal={settings?.points_per_player || 10}
-          onChanged={load}
+          onChanged={reload}
         />
       )}
 
@@ -246,7 +193,7 @@ export default function HomePage() {
           comments={roundData.roundComments}
           duplicateGroups={roundData.roundGroups}
           groupSongs={roundData.roundGroupSongs}
-          onChanged={load}
+          onChanged={reload}
         />
       )}
 
@@ -292,17 +239,11 @@ function SubmissionView({ round, player, songs, activePlayers, onChanged }) {
     setSaving(true)
     setError('')
 
-    const { error: saveError } = await supabase
-      .from('songs')
-      .upsert({
-        round_id: round.id,
-        player_id: player.id,
-        artist: form.artist.trim(),
-        title: form.title.trim(),
-        album: form.album.trim() || null,
-        link: form.link.trim() || null,
-        submitter_note: form.submitter_note.trim() || null,
-      }, { onConflict: 'round_id,player_id' })
+    const { error: saveError } = await saveSongSubmission({
+      roundId: round.id,
+      playerId: player.id,
+      form,
+    })
 
     setSaving(false)
     if (saveError) {
@@ -377,112 +318,30 @@ function SubmissionView({ round, player, songs, activePlayers, onChanged }) {
 }
 
 function VotingView({ round, player, songs, votes, comments, activePlayers, pointsTotal, onChanged }) {
-  const [draftVotes, setDraftVotes] = useState({})
-  const [savingVotes, setSavingVotes] = useState(false)
-  const [voteError, setVoteError] = useState('')
-  const draftVotesRef = useRef({})
-  const voteSaveTimersRef = useRef({})
-  const pendingVoteValuesRef = useRef({})
   const orderedSongs = useMemo(() => (
     listeningOrderFor(songs, { roundId: round.id, playerId: player.id })
   ), [songs, round.id, player.id])
   const anonymousLabelFor = playerId => anonymousNameFor(round.id, playerId)
   const myAnonymousName = anonymousLabelFor(player.id)
+  const {
+    adjustVote,
+    draftVotes,
+    hasPendingVotes,
+    pointsRemaining,
+    pointsUsed,
+    savingVotes,
+    voteError,
+  } = useDebouncedVotes({
+    roundId: round.id,
+    playerId: player.id,
+    votes,
+    pointsTotal,
+    onChanged,
+  })
 
-  useEffect(() => {
-    if (Object.keys(voteSaveTimersRef.current).length > 0) return
-
-    const mine = {}
-    votes
-      .filter(vote => vote.voter_player_id === player.id)
-      .forEach(vote => {
-        mine[vote.song_id] = vote.points
-      })
-    draftVotesRef.current = mine
-    setDraftVotes(mine)
-  }, [votes, player.id])
-
-  useEffect(() => () => {
-    Object.values(voteSaveTimersRef.current).forEach(timer => window.clearTimeout(timer))
-    Object.entries(pendingVoteValuesRef.current).forEach(([songId, points]) => {
-      persistVote(songId, points).catch(() => {})
-    })
-  }, [])
-
-  const pointsUsed = Object.values(draftVotes).reduce((sum, value) => sum + (Number(value) || 0), 0)
-  const pointsRemaining = pointsTotal - pointsUsed
   const voters = new Set(votes.filter(vote => Number(vote.points) > 0).map(vote => vote.voter_player_id))
   if (pointsUsed > 0) voters.add(player.id)
-  if (pointsUsed === 0 && Object.keys(voteSaveTimersRef.current).length > 0) voters.delete(player.id)
-
-  async function persistVote(songId, points) {
-    if (points === 0) {
-      const { error } = await supabase
-        .from('votes')
-        .delete()
-        .eq('round_id', round.id)
-        .eq('song_id', songId)
-        .eq('voter_player_id', player.id)
-      if (error) throw error
-      return
-    }
-
-    const { error } = await supabase
-      .from('votes')
-      .upsert({
-        round_id: round.id,
-        song_id: songId,
-        voter_player_id: player.id,
-        points,
-      }, { onConflict: 'song_id,voter_player_id' })
-
-    if (error) throw error
-  }
-
-  function scheduleVoteWrite(songId, points) {
-    if (voteSaveTimersRef.current[songId]) {
-      window.clearTimeout(voteSaveTimersRef.current[songId])
-    }
-
-    setSavingVotes(true)
-    setVoteError('')
-    pendingVoteValuesRef.current[songId] = points
-    voteSaveTimersRef.current[songId] = window.setTimeout(async () => {
-      delete voteSaveTimersRef.current[songId]
-
-      try {
-        await persistVote(songId, pendingVoteValuesRef.current[songId])
-        delete pendingVoteValuesRef.current[songId]
-        onChanged()
-      } catch {
-        setVoteError('Could not save votes. Try again.')
-      } finally {
-        if (Object.keys(voteSaveTimersRef.current).length === 0) {
-          setSavingVotes(false)
-        }
-      }
-    }, 350)
-  }
-
-  function adjustVote(song, delta) {
-    if (song.player_id === player.id) return
-
-    const currentDraft = draftVotesRef.current
-    const current = Number(currentDraft[song.id]) || 0
-    const usedElsewhere = Object.entries(currentDraft)
-      .filter(([songId]) => songId !== song.id)
-      .reduce((sum, [, points]) => sum + (Number(points) || 0), 0)
-    const next = Math.max(0, Math.min(current + delta, pointsTotal - usedElsewhere))
-    if (next === current) return
-
-    const nextDraft = { ...currentDraft }
-    if (next === 0) delete nextDraft[song.id]
-    else nextDraft[song.id] = next
-
-    draftVotesRef.current = nextDraft
-    setDraftVotes(nextDraft)
-    scheduleVoteWrite(song.id, next)
-  }
+  if (pointsUsed === 0 && hasPendingVotes) voters.delete(player.id)
 
   return (
     <section className="phase-layout">
@@ -768,10 +627,10 @@ function CommentThread({ comments, player, revealAuthors, anonymousLabelFor, son
 
     setSaving(true)
     setError('')
-    const { error: insertError } = await supabase.from('comments').insert({
-      round_id: roundId,
-      song_id: songId || null,
-      player_id: player.id,
+    const { error: insertError } = await saveComment({
+      roundId,
+      songId,
+      playerId: player.id,
       body: trimmed,
     })
     setSaving(false)

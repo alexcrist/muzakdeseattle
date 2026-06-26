@@ -2,69 +2,28 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
+import useRealtimeData from '../hooks/useRealtimeData.js'
+import { EMPTY_PLAYER_DATA, fetchPlayerData, PLAYER_REALTIME_TABLES } from '../lib/data.js'
+import { clearProfilePictureUrl, saveProfileName, saveProfilePictureUrl } from '../lib/mutations.js'
 import { uploadProfilePicture } from '../lib/profilePictures.js'
 import { buildLeaderboard, buildSongEntries } from '../lib/scoring.js'
 import { formatPacificDate, getRoundWeekStart, getScoredRoundIds, sortedRounds } from '../lib/schedule.js'
-import { supabase } from '../lib/supabase.js'
-
-async function fetchPlayerPageData() {
-  const [
-    { data: players },
-    { data: rounds },
-    { data: songs },
-    { data: votes },
-    { data: groups },
-    { data: groupSongs },
-  ] = await Promise.all([
-    supabase.from('players').select('*').order('name'),
-    supabase.from('rounds').select('*').order('queue_position'),
-    supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)').order('created_at'),
-    supabase.from('votes').select('*'),
-    supabase.from('duplicate_groups').select('*'),
-    supabase.from('duplicate_group_songs').select('*'),
-  ])
-
-  return {
-    players: players || [],
-    rounds: rounds || [],
-    songs: songs || [],
-    votes: votes || [],
-    groups: groups || [],
-    groupSongs: groupSongs || [],
-  }
-}
 
 export default function PlayerPage() {
   const { playerId } = useParams()
   const { player, setPlayer, logout } = usePlayer()
   const { settings } = useSettings()
-  const [data, setData] = useState({ players: [], rounds: [], songs: [], votes: [], groups: [], groupSongs: [] })
-  const [loading, setLoading] = useState(true)
+  const { data, loading, reload } = useRealtimeData({
+    channelName: `player-page-season-2-${playerId}`,
+    fetcher: fetchPlayerData,
+    initialData: EMPTY_PLAYER_DATA,
+    tables: PLAYER_REALTIME_TABLES,
+  })
   const [profile, setProfile] = useState({ name: player.name, avatar_url: player.avatar_url || '' })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [message, setMessage] = useState('')
-
-  async function load() {
-    const next = await fetchPlayerPageData()
-    setData(next)
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    load()
-    const channel = supabase
-      .channel(`player-page-season-2-${playerId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
-      .subscribe()
-    return () => supabase.removeChannel(channel)
-  }, [playerId])
 
   useEffect(() => {
     if (playerId !== player.id) return
@@ -132,12 +91,7 @@ export default function PlayerPage() {
     setSaving(true)
     setMessage('')
 
-    const { data: updated, error } = await supabase
-      .from('players')
-      .update({ name })
-      .eq('id', player.id)
-      .select()
-      .single()
+    const { data: updated, error } = await saveProfileName(player.id, name)
 
     setSaving(false)
     if (error || !updated) {
@@ -148,19 +102,14 @@ export default function PlayerPage() {
     setPlayer(updated)
     setMessage('Profile saved.')
     setIsEditingProfile(false)
-    load()
+    reload()
   }
 
   async function clearProfilePicture() {
     setSaving(true)
     setMessage('')
 
-    const { data: updated, error } = await supabase
-      .from('players')
-      .update({ avatar_url: null })
-      .eq('id', player.id)
-      .select()
-      .single()
+    const { data: updated, error } = await clearProfilePictureUrl(player.id)
 
     setSaving(false)
     if (error || !updated) {
@@ -172,7 +121,7 @@ export default function PlayerPage() {
     setProfile(p => ({ ...p, avatar_url: '' }))
     setMessage('Profile picture removed.')
     setIsEditingProfile(false)
-    load()
+    reload()
   }
 
   async function handlePictureUpload(event) {
@@ -185,12 +134,7 @@ export default function PlayerPage() {
 
     try {
       const avatarUrl = await uploadProfilePicture(player.id, file)
-      const { data: updated, error } = await supabase
-        .from('players')
-        .update({ avatar_url: avatarUrl })
-        .eq('id', player.id)
-        .select()
-        .single()
+      const { data: updated, error } = await saveProfilePictureUrl(player.id, avatarUrl)
 
       if (error || !updated) throw new Error('Uploaded, but could not save the profile picture.')
 
@@ -198,7 +142,7 @@ export default function PlayerPage() {
       setProfile(p => ({ ...p, avatar_url: updated.avatar_url || '' }))
       setMessage('Profile picture uploaded.')
       setIsEditingProfile(false)
-      load()
+      reload()
     } catch (error) {
       setMessage(error.message || 'Could not upload that picture.')
     } finally {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Avatar from '../components/Avatar.jsx'
-import { supabase } from '../lib/supabase.js'
+import { fetchJoinData, fetchPlayerByName } from '../lib/data.js'
+import { createPlayer } from '../lib/mutations.js'
 
 const AVATAR_COLORS = ['#ff7ab6', '#65d6ff', '#ffe66d', '#a78bfa', '#6ee7b7', '#ff9f6e']
 
@@ -18,12 +19,9 @@ export default function JoinScreen({ onJoin }) {
 
   useEffect(() => {
     async function load() {
-      const [{ data: playersData }, { data: settingsData }] = await Promise.all([
-        supabase.from('players').select('*').eq('active', true).order('name'),
-        supabase.from('league_settings').select('league_name, season_label').eq('id', 1).single(),
-      ])
+      const { players: playersData, settings: settingsData } = await fetchJoinData()
 
-      setPlayers(playersData || [])
+      setPlayers(playersData)
       if (settingsData?.league_name) setLeagueName(settingsData.league_name)
       if (settingsData?.season_label) setSeasonLabel(settingsData.season_label)
     }
@@ -38,11 +36,7 @@ export default function JoinScreen({ onJoin }) {
     setLoading(true)
     setError('')
 
-    const { data: existing } = await supabase
-      .from('players')
-      .select('*')
-      .ilike('name', trimmed)
-      .single()
+    const existing = await fetchPlayerByName(trimmed)
 
     if (existing) {
       if (!existing.active) {
@@ -54,15 +48,10 @@ export default function JoinScreen({ onJoin }) {
       return
     }
 
-    const { data, error: insertError } = await supabase
-      .from('players')
-      .insert({
-        name: trimmed,
-        active: true,
-        avatar_color: randomAvatarColor(),
-      })
-      .select()
-      .single()
+    const { data, error: insertError } = await createPlayer({
+      name: trimmed,
+      avatarColor: randomAvatarColor(),
+    })
 
     if (insertError || !data) {
       setError('That profile could not be created. Try a slightly different name.')

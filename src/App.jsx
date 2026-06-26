@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { getCurrentMonday } from './lib/schedule.js'
+import { fetchLeagueSettings, fetchStoredPlayer } from './lib/data.js'
 import { clearPlayer, getStoredPlayer, storePlayer } from './lib/identity.js'
 import { isSupabaseConfigured, supabase } from './lib/supabase.js'
 
@@ -38,20 +38,6 @@ function SetupRequired() {
   )
 }
 
-async function loadSettings() {
-  const { data, error } = await supabase
-    .from('league_settings')
-    .select('*')
-    .eq('id', 1)
-    .single()
-
-  if (error || !data) return null
-  return {
-    ...data,
-    schedule_start_date: data.schedule_start_date || getCurrentMonday(),
-  }
-}
-
 export default function App() {
   const [player, setPlayer] = useState(getStoredPlayer())
   const [settings, setSettings] = useState(null)
@@ -66,16 +52,12 @@ export default function App() {
     let mounted = true
 
     async function boot() {
-      const nextSettings = await loadSettings()
+      const nextSettings = await fetchLeagueSettings()
       if (mounted) setSettings(nextSettings)
 
       const stored = getStoredPlayer()
       if (stored?.id) {
-        const { data } = await supabase
-          .from('players')
-          .select('*')
-          .eq('id', stored.id)
-          .single()
+        const data = await fetchStoredPlayer(stored.id)
         if (data?.active) {
           storePlayer(data)
           if (mounted) setPlayer(data)
@@ -93,7 +75,7 @@ export default function App() {
     const settingsSub = supabase
       .channel('settings-season-2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'league_settings' }, async () => {
-        const nextSettings = await loadSettings()
+        const nextSettings = await fetchLeagueSettings()
         if (mounted) setSettings(nextSettings)
       })
       .subscribe()

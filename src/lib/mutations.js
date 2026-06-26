@@ -1,0 +1,192 @@
+import { addDays, getCurrentMonday, normalizeTemplate } from './schedule.js'
+import { supabase } from './supabase.js'
+
+export async function saveSongSubmission({ roundId, playerId, form }) {
+  const { error } = await supabase
+    .from('songs')
+    .upsert({
+      round_id: roundId,
+      player_id: playerId,
+      artist: form.artist.trim(),
+      title: form.title.trim(),
+      album: form.album.trim() || null,
+      link: form.link.trim() || null,
+      submitter_note: form.submitter_note.trim() || null,
+    }, { onConflict: 'round_id,player_id' })
+
+  return { error }
+}
+
+export async function createPlayer({ name, avatarColor }) {
+  const { data, error } = await supabase
+    .from('players')
+    .insert({
+      name,
+      active: true,
+      avatar_color: avatarColor,
+    })
+    .select()
+    .single()
+
+  return { data, error }
+}
+
+export async function persistVote({ roundId, songId, playerId, points }) {
+  if (points === 0) {
+    const { error } = await supabase
+      .from('votes')
+      .delete()
+      .eq('round_id', roundId)
+      .eq('song_id', songId)
+      .eq('voter_player_id', playerId)
+    if (error) throw error
+    return
+  }
+
+  const { error } = await supabase
+    .from('votes')
+    .upsert({
+      round_id: roundId,
+      song_id: songId,
+      voter_player_id: playerId,
+      points,
+    }, { onConflict: 'song_id,voter_player_id' })
+
+  if (error) throw error
+}
+
+export async function postComment({ roundId, songId, playerId, body }) {
+  const { error } = await supabase.from('comments').insert({
+    round_id: roundId,
+    song_id: songId || null,
+    player_id: playerId,
+    body,
+  })
+
+  return { error }
+}
+
+export async function addRound({ form, playerId, context }) {
+  const nextPosition = context.orderedRounds.length
+  const weekStart = addDays(context.startDate, nextPosition * 7)
+
+  const { error } = await supabase.from('rounds').insert({
+    theme_name: form.theme_name.trim(),
+    theme_description: form.theme_description.trim(),
+    queue_position: nextPosition,
+    submitted_by_player_id: playerId,
+    week_start_date: weekStart,
+    is_archived: false,
+  })
+
+  return { error }
+}
+
+export async function moveUpcomingRound({ round, direction, upcomingRows, scheduleStartDate }) {
+  const future = upcomingRows.map(row => row.round)
+  const currentIndex = future.findIndex(item => item.id === round.id)
+  const nextIndex = currentIndex + direction
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= future.length) return
+
+  const reordered = [...future]
+  const [item] = reordered.splice(currentIndex, 1)
+  reordered.splice(nextIndex, 0, item)
+
+  const firstFuturePosition = upcomingRows[0].round.queue_position
+  await Promise.all(reordered.map((itemRound, offset) => {
+    const queuePosition = firstFuturePosition + offset
+    return supabase
+      .from('rounds')
+      .update({
+        queue_position: queuePosition,
+        week_start_date: addDays(scheduleStartDate, queuePosition * 7),
+      })
+      .eq('id', itemRound.id)
+  }))
+}
+
+export async function saveLeagueSettings({ form, rounds }) {
+  const payload = {
+    id: 1,
+    league_name: form.league_name.trim() || 'Muzak de Seattle',
+    season_label: form.season_label.trim() || 'Season 2',
+    points_per_player: Math.max(1, Number(form.points_per_player) || 10),
+    schedule_start_date: form.schedule_start_date || getCurrentMonday(),
+    weekly_phase_template: normalizeTemplate(form.weekly_phase_template),
+    timezone: 'America/Los_Angeles',
+  }
+
+  const { data: saved, error } = await supabase
+    .from('league_settings')
+    .upsert(payload, { onConflict: 'id' })
+    .select()
+    .single()
+
+  if (error || !saved) return { saved: null, error }
+
+  await Promise.all(rounds.map((round, index) => (
+    supabase
+      .from('rounds')
+      .update({ week_start_date: addDays(payload.schedule_start_date, index * 7) })
+      .eq('id', round.id)
+  )))
+
+  return { saved, error: null }
+}
+
+export async function togglePlayerActive(player) {
+  const { error } = await supabase
+    .from('players')
+    .update({ active: !player.active })
+    .eq('id', player.id)
+
+  return { error }
+}
+
+export async function saveProfileName(playerId, name) {
+  const { data, error } = await supabase
+    .from('players')
+    .update({ name })
+    .eq('id', playerId)
+    .select()
+    .single()
+
+  return { data, error }
+}
+
+export async function saveProfilePictureUrl(playerId, avatarUrl) {
+  const { data, error } = await supabase
+    .from('players')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', playerId)
+    .select()
+    .single()
+
+  return { data, error }
+}
+
+export async function clearProfilePictureUrl(playerId) {
+  const { data, error } = await supabase
+    .from('players')
+    .update({ avatar_url: null })
+    .eq('id', playerId)
+    .select()
+    .single()
+
+  return { data, error }
+}
+
+export async function createDuplicateMerge({ roundId, songIds, canonicalSongId }) {
+  const { error } = await supabase.rpc('create_duplicate_merge', {
+    p_round_id: roundId,
+    p_song_ids: songIds,
+    p_canonical_song_id: canonicalSongId,
+  })
+
+  return { error }
+}
+
+export async function deleteDuplicateMerge(groupId) {
+  const { error } = await supabase.from('duplicate_groups').delete().eq('id', groupId)
+  return { error }
+}

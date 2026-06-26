@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
+import useRealtimeData from '../hooks/useRealtimeData.js'
+import { ADMIN_REALTIME_TABLES, EMPTY_ADMIN_DATA, fetchAdminData } from '../lib/data.js'
+import { createDuplicateMerge, deleteDuplicateMerge, saveLeagueSettings, togglePlayerActive } from '../lib/mutations.js'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
 import {
-  addDays,
   DAY_KEYS,
   DAY_LABELS,
   DEFAULT_WEEKLY_TEMPLATE,
@@ -14,43 +16,19 @@ import {
   normalizeTemplate,
   PHASES,
 } from '../lib/schedule.js'
-import { supabase } from '../lib/supabase.js'
 
 const PHASE_OPTIONS = ['submission', 'voting', 'appreciation', 'off']
 const ADMIN_UNLOCK_THRESHOLD = 86
 
-async function fetchAdminData() {
-  const [
-    { data: rounds },
-    { data: songs },
-    { data: votes },
-    { data: groups },
-    { data: groupSongs },
-    { data: players },
-  ] = await Promise.all([
-    supabase.from('rounds').select('*').order('queue_position'),
-    supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)').order('created_at'),
-    supabase.from('votes').select('*'),
-    supabase.from('duplicate_groups').select('*').order('created_at'),
-    supabase.from('duplicate_group_songs').select('*'),
-    supabase.from('players').select('*').order('name'),
-  ])
-
-  return {
-    rounds: rounds || [],
-    songs: songs || [],
-    votes: votes || [],
-    groups: groups || [],
-    groupSongs: groupSongs || [],
-    players: players || [],
-  }
-}
-
 export default function AdminPage() {
   const { player } = usePlayer()
   const { settings, setSettings } = useSettings()
-  const [data, setData] = useState({ rounds: [], songs: [], votes: [], groups: [], groupSongs: [], players: [] })
-  const [loading, setLoading] = useState(true)
+  const { data, loading, reload } = useRealtimeData({
+    channelName: 'admin-season-2',
+    fetcher: fetchAdminData,
+    initialData: EMPTY_ADMIN_DATA,
+    tables: ADMIN_REALTIME_TABLES,
+  })
   const [adminUnlocked, setAdminUnlocked] = useState(false)
   const [form, setForm] = useState({
     league_name: settings?.league_name || 'Muzak de Seattle',
@@ -60,26 +38,6 @@ export default function AdminPage() {
     weekly_phase_template: normalizeTemplate(settings?.weekly_phase_template || DEFAULT_WEEKLY_TEMPLATE),
   })
   const [message, setMessage] = useState('')
-
-  async function load() {
-    const next = await fetchAdminData()
-    setData(next)
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    load()
-    const channel = supabase
-      .channel('admin-season-2')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, load)
-      .subscribe()
-    return () => supabase.removeChannel(channel)
-  }, [])
 
   useEffect(() => {
     if (!settings) return
@@ -94,37 +52,16 @@ export default function AdminPage() {
 
   async function saveSettings(event) {
     event.preventDefault()
-    const payload = {
-      id: 1,
-      league_name: form.league_name.trim() || 'Muzak de Seattle',
-      season_label: form.season_label.trim() || 'Season 2',
-      points_per_player: Math.max(1, Number(form.points_per_player) || 10),
-      schedule_start_date: form.schedule_start_date || getCurrentMonday(),
-      weekly_phase_template: normalizeTemplate(form.weekly_phase_template),
-      timezone: 'America/Los_Angeles',
-    }
-
-    const { data: saved, error } = await supabase
-      .from('league_settings')
-      .upsert(payload, { onConflict: 'id' })
-      .select()
-      .single()
+    const { saved, error } = await saveLeagueSettings({ form, rounds: data.rounds })
 
     if (error || !saved) {
       setMessage('Could not save settings.')
       return
     }
 
-    await Promise.all(data.rounds.map((round, index) => (
-      supabase
-        .from('rounds')
-        .update({ week_start_date: addDays(payload.schedule_start_date, index * 7) })
-        .eq('id', round.id)
-    )))
-
     setSettings(saved)
     setMessage('Settings saved.')
-    load()
+    reload()
   }
 
   if (loading) {
@@ -154,7 +91,7 @@ export default function AdminPage() {
         <AdminUnlock onUnlock={() => setAdminUnlocked(true)} />
       ) : (
         <>
-          <DuplicateMergeTool settings={settings} data={data} onChanged={load} />
+          <DuplicateMergeTool settings={settings} data={data} onChanged={reload} />
 
           <section className="card admin-settings">
             <div className="section-heading">
@@ -204,7 +141,7 @@ export default function AdminPage() {
             </form>
           </section>
 
-          <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={load} />
+          <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={reload} />
         </>
       )}
 
@@ -335,10 +272,7 @@ function PlayerStatusTool({ players, currentPlayerId, onChanged }) {
   const inactive = players.filter(row => !row.active)
 
   async function toggleActive(row) {
-    const { error } = await supabase
-      .from('players')
-      .update({ active: !row.active })
-      .eq('id', row.id)
+    const { error } = await togglePlayerActive(row)
 
     if (error) {
       setMessage('Could not update player status.')
@@ -496,10 +430,10 @@ function DuplicateMergeTool({ settings, data, onChanged }) {
       ? canonicalSongId
       : selectedSongIds[0]
 
-    const { error } = await supabase.rpc('create_duplicate_merge', {
-      p_round_id: selectedRoundId,
-      p_song_ids: selectedSongIds,
-      p_canonical_song_id: canonical,
+    const { error } = await createDuplicateMerge({
+      roundId: selectedRoundId,
+      songIds: selectedSongIds,
+      canonicalSongId: canonical,
     })
 
     if (error) {
@@ -514,7 +448,7 @@ function DuplicateMergeTool({ settings, data, onChanged }) {
   }
 
   async function deleteGroup(groupId) {
-    await supabase.from('duplicate_groups').delete().eq('id', groupId)
+    await deleteDuplicateMerge(groupId)
     setMessage('Duplicate merge removed.')
     onChanged()
   }

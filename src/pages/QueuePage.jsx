@@ -1,62 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
+import useRealtimeData from '../hooks/useRealtimeData.js'
+import { EMPTY_ROUNDS_DATA, fetchRoundsData, ROUNDS_REALTIME_TABLES } from '../lib/data.js'
+import { addRound, moveUpcomingRound } from '../lib/mutations.js'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
-import { addDays, formatPacificDate, getLeagueContext, getRoundState, getRoundTiming, PHASES } from '../lib/schedule.js'
-import { supabase } from '../lib/supabase.js'
-
-async function fetchRoundsData() {
-  const [
-    { data: rounds },
-    { data: songs },
-    { data: votes },
-    { data: groups },
-    { data: groupSongs },
-  ] = await Promise.all([
-    supabase.from('rounds').select('*, players(id, name, avatar_url, avatar_color)').order('queue_position'),
-    supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)').order('created_at'),
-    supabase.from('votes').select('*'),
-    supabase.from('duplicate_groups').select('*'),
-    supabase.from('duplicate_group_songs').select('*'),
-  ])
-
-  return {
-    rounds: rounds || [],
-    songs: songs || [],
-    votes: votes || [],
-    groups: groups || [],
-    groupSongs: groupSongs || [],
-  }
-}
+import { formatPacificDate, getLeagueContext, getRoundState, getRoundTiming, PHASES } from '../lib/schedule.js'
 
 export default function RoundsPage() {
   const { player } = usePlayer()
   const { settings } = useSettings()
-  const [data, setData] = useState({ rounds: [], songs: [], votes: [], groups: [], groupSongs: [] })
-  const [loading, setLoading] = useState(true)
+  const { data, loading, reload } = useRealtimeData({
+    channelName: 'rounds-season-2',
+    fetcher: fetchRoundsData,
+    initialData: EMPTY_ROUNDS_DATA,
+    tables: ROUNDS_REALTIME_TABLES,
+  })
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ theme_name: '', theme_description: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  async function load() {
-    const next = await fetchRoundsData()
-    setData(next)
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    load()
-    const channel = supabase
-      .channel('rounds-season-2')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
-      .subscribe()
-    return () => supabase.removeChannel(channel)
-  }, [])
 
   const context = useMemo(() => getLeagueContext(data.rounds, settings), [data.rounds, settings])
   const roundRows = context.orderedRounds.map((round, index) => ({
@@ -78,16 +41,10 @@ export default function RoundsPage() {
 
     setSaving(true)
     setError('')
-    const nextPosition = context.orderedRounds.length
-    const weekStart = addDays(context.startDate, nextPosition * 7)
-
-    const { error: insertError } = await supabase.from('rounds').insert({
-      theme_name: form.theme_name.trim(),
-      theme_description: form.theme_description.trim(),
-      queue_position: nextPosition,
-      submitted_by_player_id: player.id,
-      week_start_date: weekStart,
-      is_archived: false,
+    const { error: insertError } = await addRound({
+      form,
+      playerId: player.id,
+      context,
     })
 
     setSaving(false)
@@ -98,31 +55,17 @@ export default function RoundsPage() {
 
     setForm({ theme_name: '', theme_description: '' })
     setShowAdd(false)
-    load()
+    reload()
   }
 
   async function moveRound(round, direction) {
-    const future = upcoming.map(row => row.round)
-    const currentIndex = future.findIndex(item => item.id === round.id)
-    const nextIndex = currentIndex + direction
-    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= future.length) return
-
-    const reordered = [...future]
-    const [item] = reordered.splice(currentIndex, 1)
-    reordered.splice(nextIndex, 0, item)
-
-    const firstFuturePosition = upcoming[0].round.queue_position
-    await Promise.all(reordered.map((itemRound, offset) => {
-      const queuePosition = firstFuturePosition + offset
-      return supabase
-        .from('rounds')
-        .update({
-          queue_position: queuePosition,
-          week_start_date: addDays(context.startDate, queuePosition * 7),
-        })
-        .eq('id', itemRound.id)
-    }))
-    load()
+    await moveUpcomingRound({
+      round,
+      direction,
+      upcomingRows: upcoming,
+      scheduleStartDate: context.startDate,
+    })
+    reload()
   }
 
   if (loading) {

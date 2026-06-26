@@ -1,63 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
+import useRealtimeData from '../hooks/useRealtimeData.js'
+import { EMPTY_PLAYER_DATA, fetchPlayerData, PLAYER_REALTIME_TABLES } from '../lib/data.js'
 import { buildLeaderboard, buildSongEntries } from '../lib/scoring.js'
 import { getLeagueContext, getScoredRoundIds } from '../lib/schedule.js'
-import { supabase } from '../lib/supabase.js'
-
-async function fetchPlayersData() {
-  const [
-    { data: players },
-    { data: rounds },
-    { data: songs },
-    { data: votes },
-    { data: groups },
-    { data: groupSongs },
-  ] = await Promise.all([
-    supabase.from('players').select('*').order('name'),
-    supabase.from('rounds').select('*').order('queue_position'),
-    supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)'),
-    supabase.from('votes').select('*'),
-    supabase.from('duplicate_groups').select('*'),
-    supabase.from('duplicate_group_songs').select('*'),
-  ])
-
-  return {
-    players: players || [],
-    rounds: rounds || [],
-    songs: songs || [],
-    votes: votes || [],
-    groups: groups || [],
-    groupSongs: groupSongs || [],
-  }
-}
 
 export default function PlayerListPage() {
   const { player } = usePlayer()
   const { settings } = useSettings()
-  const [data, setData] = useState({ players: [], rounds: [], songs: [], votes: [], groups: [], groupSongs: [] })
-  const [loading, setLoading] = useState(true)
-
-  async function load() {
-    const next = await fetchPlayersData()
-    setData(next)
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    load()
-    const channel = supabase
-      .channel('players-season-2')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
-      .subscribe()
-    return () => supabase.removeChannel(channel)
-  }, [])
+  const { data, loading } = useRealtimeData({
+    channelName: 'players-season-2',
+    fetcher: fetchPlayerData,
+    initialData: EMPTY_PLAYER_DATA,
+    tables: PLAYER_REALTIME_TABLES,
+  })
 
   const scoredRoundIds = useMemo(() => getScoredRoundIds(data.rounds, settings), [data.rounds, settings])
   const context = useMemo(() => getLeagueContext(data.rounds, settings), [data.rounds, settings])
