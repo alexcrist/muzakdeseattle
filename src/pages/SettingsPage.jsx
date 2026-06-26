@@ -193,14 +193,6 @@ export default function AdminPage() {
 
       <DuplicateMergeTool settings={settings} data={data} onChanged={load} />
 
-      <section className="card setup-notes">
-        <h2>Deployment notes</h2>
-        <p>Season 2 expects a fresh Supabase project and these Netlify environment variables:</p>
-        <code>NEXT_PUBLIC_SUPABASE_URL</code>
-        <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>
-        <p>The app also accepts `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.</p>
-        <p>The full setup SQL and Cloudflare domain notes are in SETUP.md.</p>
-      </section>
     </main>
   )
 }

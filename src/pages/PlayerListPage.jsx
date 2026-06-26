@@ -94,7 +94,6 @@ export default function PlayerListPage() {
       .from('players')
       .update({
         name,
-        avatar_url: profile.avatar_url.trim() || null,
       })
       .eq('id', player.id)
       .select()
@@ -108,6 +107,29 @@ export default function PlayerListPage() {
 
     setPlayer(updated)
     setMessage('Profile saved.')
+    load()
+  }
+
+  async function clearProfilePicture() {
+    setSaving(true)
+    setMessage('')
+
+    const { data: updated, error } = await supabase
+      .from('players')
+      .update({ avatar_url: null })
+      .eq('id', player.id)
+      .select()
+      .single()
+
+    setSaving(false)
+    if (error || !updated) {
+      setMessage('Could not remove profile picture.')
+      return
+    }
+
+    setPlayer(updated)
+    setProfile(p => ({ ...p, avatar_url: '' }))
+    setMessage('Profile picture removed.')
     load()
   }
 
@@ -191,26 +213,16 @@ export default function PlayerListPage() {
               />
             </label>
           </div>
-          <label>
-            <span>Profile image URL</span>
-            <div className="inline-field">
-              <input
-                type="url"
-                value={profile.avatar_url}
-                onChange={event => setProfile(p => ({ ...p, avatar_url: event.target.value }))}
-                placeholder="Upload a picture, or paste a public image URL"
-              />
-              {profile.avatar_url && (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setProfile(p => ({ ...p, avatar_url: '' }))}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </label>
+          {profile.avatar_url && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={clearProfilePicture}
+              disabled={saving || uploading}
+            >
+              Remove profile picture
+            </button>
+          )}
           {message && <p className={message.includes('Could not') || message.includes('Choose') || message.includes('under') || message.includes('Uploaded, but') ? 'error-msg' : 'success-msg'}>{message}</p>}
           <button type="submit" className="btn btn-primary" disabled={saving || uploading}>
             {uploading ? 'Uploading...' : saving ? 'Saving...' : 'Save profile'}

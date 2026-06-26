@@ -342,15 +342,6 @@ select:focus {
   gap: 0.8rem;
 }
 
-.inline-field {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.inline-field input {
-  min-width: 0;
-}
-
 .btn,
 .icon-btn {
   min-height: 2.45rem;
@@ -1026,8 +1017,7 @@ select:focus {
 }
 
 .admin-settings,
-.duplicate-tool,
-.setup-notes {
+.duplicate-tool {
   display: grid;
   gap: 1rem;
   margin-bottom: 1rem;
@@ -1246,9 +1236,6 @@ select:focus {
     flex-direction: column;
   }
 
-  .inline-field {
-    flex-direction: column;
-  }
 }
 
 @media (max-width: 560px) {

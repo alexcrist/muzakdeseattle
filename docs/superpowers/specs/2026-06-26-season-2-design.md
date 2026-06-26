@@ -49,7 +49,7 @@ Admins can edit the weekly template with seven day tiles. Each day can be `submi
 
 ## Player Profiles
 
-Players can edit their display name and profile image URL. If no image URL is set, the UI shows a generated bubble avatar based on name/color. Avatars appear in player lists, comments once revealed, standings, and profile surfaces.
+Players can edit their display name and upload a profile picture to Supabase Storage. If no picture is uploaded, the UI shows a generated bubble avatar based on name/color. Avatars appear in player lists, comments once revealed, standings, and profile surfaces.
 
 ## Game Flow
 
