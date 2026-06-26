@@ -1,39 +1,67 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This repository is Muzak Season 2: a Vite + React SPA backed by a fresh Supabase database.
 
 ## Commands
 
 - `npm install` — install dependencies
 - `npm run dev` — start Vite dev server
-- `npm run build` — produce a `dist/` folder (this is what ships to Netlify)
-- `npm run preview` — serve the built `dist/` locally
+- `npm run build` — produce `dist/`
+- `npm run preview` — serve the built `dist/`
 
-There is no test runner, no linter, and no type-checker configured. Don't suggest running tests or lint — they do not exist.
+There is no test runner, linter, or type-checker configured.
 
-## Deployment model
+## Deployment
 
-Deployment is manual: run `npm run build`, then drag the `dist/` folder into Netlify's deploy drop zone. `public/_redirects` provides the SPA fallback for client-side routing. `SETUP.md` is a non-technical end-user walkthrough of the full Supabase + Netlify setup — treat it as user-facing docs, not developer docs.
+The app is deployed on the existing Netlify site. Supabase credentials come from Vite environment variables:
 
-## Architecture
+- `NEXT_PUBLIC_SUPABASE_URL` or `VITE_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `VITE_SUPABASE_ANON_KEY`
 
-### Stack
-Vite + React 18 SPA backed by Supabase (Postgres + Realtime). `react-router-dom` v6 for routing, `@dnd-kit/*` for drag-and-drop in the round queue. No server code — the frontend talks directly to Supabase.
+Do not hardcode Supabase credentials in source. `public/_redirects` provides SPA fallback routing.
 
-### No auth, public RLS
-There is no login. Player identity is just a name + UUID stored in `localStorage` via `src/lib/identity.js`. All Supabase tables have `using (true) with check (true)` RLS policies — any client can read or write any row. **Do not add authorization logic assuming a session** and do not recommend moving secrets server-side without first discussing it — the "anon key in source" pattern is intentional for this deploy model (see `src/lib/supabase.js`).
+## No Auth
 
-### Round state machine
-Rounds move through `pending → submission → voting → complete`. Transitions happen **client-side** in `tickRoundTransitions()` (`src/lib/rounds.js`), which runs on page load and every 60s from `App.jsx`. Any connected client can advance a round when its deadline passes; when none are connected, rounds stall until someone opens the app. This is a known behavior, not a bug (see the SETUP.md troubleshooting entry). Pause/unpause works by recording `paused_at` on `league_settings` and, on unpause, shifting every active round's deadlines forward by the elapsed pause duration.
+There is intentionally no login. Player identity is a player row stored in localStorage. Admin controls are openly accessible to everyone. Supabase RLS policies allow public read/write access.
 
-### App shell and contexts
-`src/App.jsx` owns two contexts: `PlayerContext` (current local player) and `SettingsContext` (the single `league_settings` row, id=1). Both are loaded before routing mounts; settings are kept fresh via a Supabase Realtime subscription. If no player is stored, the app renders `JoinScreen` instead of the router. `HomePage` is a dispatcher — it picks `SubmissionPhase`, `VotingPhase`, `ResultsPhase`, or `WaitingState` based on the current round's status, and auto-surfaces unseen results using a `ml_seen_results` localStorage key.
+## Season 2 Round Model
 
-### Realtime
-Pages that need live data subscribe to `postgres_changes` on the relevant table (e.g. `rounds`, `league_settings`) and re-fetch on any change. Follow this pattern rather than hand-rolling polling.
+Do not use Season 1 round statuses or manual phase advancement.
 
-### Schema
-The canonical schema lives in two places: `SETUP.md` (the copy users paste into Supabase) and the comment block at the bottom of `src/lib/supabase.js`. **Keep these two in sync** when adding columns or tables — existing installs won't auto-migrate, so any schema change is also a manual migration step users have to run.
+Phases are computed from:
 
-### Flavor text
-All user-facing copy lives in `src/lib/flavor.js` as a single `FLAVOR` object. Edit strings there rather than inlining copy in components — users are told this file is the one place to customize tone.
+- `league_settings.schedule_start_date`
+- `league_settings.weekly_phase_template`
+- round `queue_position`
+- current date in `America/Los_Angeles`
+
+Default schedule:
+
+- Monday-Wednesday: submission
+- Thursday-Saturday: voting
+- Sunday: appreciation
+
+Phase boundaries happen at midnight Pacific. The app computes the correct phase when opened, so no client-side ticking transition or server cron is required.
+
+## Core Helpers
+
+- `src/lib/schedule.js` owns Pacific-time scheduling, current round derivation, phase labels, and scored-round detection.
+- `src/lib/scoring.js` owns duplicate-aware song totals and leaderboards.
+- `src/lib/supabase.js` owns the Supabase client and env-var guard.
+
+Keep scoring rules centralized in `src/lib/scoring.js`; duplicate handling must be identical on Home, Rounds history, and Leaderboard.
+
+## Duplicate Rules
+
+Duplicate merges happen after voting. The app never mutates votes to merge duplicates. A merge group joins two or more song rows and chooses one canonical display song.
+
+Scoring:
+
+- Sum votes across all songs in the group.
+- Remove votes from any submitter in that group.
+- Add courtesy points equal to `submitter_count - 1`.
+- Award the final merged total to every duplicate submitter.
+
+## Schema
+
+The full Season 2 SQL lives in `SETUP.md`. Keep that setup SQL in sync with table assumptions in code.

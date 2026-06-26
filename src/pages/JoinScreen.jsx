@@ -1,41 +1,43 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import Avatar from '../components/Avatar.jsx'
 import { supabase } from '../lib/supabase.js'
-import { FLAVOR } from '../lib/flavor.js'
+
+const AVATAR_COLORS = ['#ff7ab6', '#65d6ff', '#ffe66d', '#a78bfa', '#6ee7b7', '#ff9f6e']
+
+function randomAvatarColor() {
+  return AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
+}
 
 export default function JoinScreen({ onJoin }) {
   const [name, setName] = useState('')
   const [players, setPlayers] = useState([])
+  const [leagueName, setLeagueName] = useState('Muzak')
+  const [seasonLabel, setSeasonLabel] = useState('Season 2')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [leagueName, setLeagueName] = useState('Music League')
 
   useEffect(() => {
-    // Only show ACTIVE players on join screen
-    supabase
-      .from('players')
-      .select('id, name, active')
-      .eq('active', true)
-      .order('name')
-      .then(({ data }) => setPlayers(data || []))
+    async function load() {
+      const [{ data: playersData }, { data: settingsData }] = await Promise.all([
+        supabase.from('players').select('*').eq('active', true).order('name'),
+        supabase.from('league_settings').select('league_name, season_label').eq('id', 1).single(),
+      ])
 
-    supabase
-      .from('league_settings')
-      .select('league_name')
-      .eq('id', 1)
-      .single()
-      .then(({ data }) => {
-        if (data?.league_name) setLeagueName(data.league_name)
-      })
+      setPlayers(playersData || [])
+      if (settingsData?.league_name) setLeagueName(settingsData.league_name)
+      if (settingsData?.season_label) setSeasonLabel(settingsData.season_label)
+    }
+    load()
   }, [])
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSubmit(event) {
+    event.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) return
+
     setLoading(true)
     setError('')
 
-    // Check if player already exists (active or inactive)
     const { data: existing } = await supabase
       .from('players')
       .select('*')
@@ -44,7 +46,7 @@ export default function JoinScreen({ onJoin }) {
 
     if (existing) {
       if (!existing.active) {
-        setError('That account is inactive. Contact your league admin.')
+        setError('That profile is inactive. Ask someone in Admin to reactivate it.')
         setLoading(false)
         return
       }
@@ -52,96 +54,73 @@ export default function JoinScreen({ onJoin }) {
       return
     }
 
-    // Create new player
-    const { data: newPlayer, error: err } = await supabase
+    const { data, error: insertError } = await supabase
       .from('players')
-      .insert({ name: trimmed, active: true })
+      .insert({
+        name: trimmed,
+        active: true,
+        avatar_color: randomAvatarColor(),
+      })
       .select()
       .single()
 
-    if (err) {
-      setError('Something went wrong. Try again.')
+    if (insertError || !data) {
+      setError('That profile could not be created. Try a slightly different name.')
       setLoading(false)
       return
     }
 
-    onJoin(newPlayer)
+    onJoin(data)
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem 1rem',
-    }}>
-      {/* Logo area */}
-      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎵</div>
-        <h1 style={{ color: 'var(--accent)', letterSpacing: '0.08em' }}>{leagueName}</h1>
-        {/* FLAVOR TEXT: Join welcome */}
-        <p className="flavor-text" style={{ marginTop: '0.5rem' }}>{FLAVOR.JOIN_WELCOME}</p>
-      </div>
+    <main className="join-screen">
+      <section className="join-hero">
+        <span className="bubble-mark">M2</span>
+        <p className="eyebrow">{seasonLabel}</p>
+        <h1>{leagueName}</h1>
+        <p className="join-copy">Pick your profile and get to the songs.</p>
+      </section>
 
-      <div style={{ width: '100%', maxWidth: '420px' }}>
-        <div className="card">
+      <section className="join-panel">
+        {players.length > 0 && (
+          <div className="join-section">
+            <h2>Already here</h2>
+            <div className="profile-grid">
+              {players.map(player => (
+                <button
+                  type="button"
+                  key={player.id}
+                  className="profile-choice"
+                  onClick={() => onJoin(player)}
+                >
+                  <Avatar player={player} />
+                  <span>{player.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-          {/* ── Existing players FIRST ── */}
-          {players.length > 0 && (
-            <>
-              <p style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1rem', marginBottom: '0.3rem' }}>
-                Already registered?
-              </p>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: '0.9rem' }}>
-                If you've already registered, select your profile name below.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '260px', overflowY: 'auto', marginBottom: '0.5rem' }}>
-                {players.map(p => (
-                  <button
-                    key={p.id}
-                    className="btn btn-ghost"
-                    style={{ justifyContent: 'flex-start' }}
-                    onClick={() => onJoin(p)}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-              <hr className="divider" />
-            </>
-          )}
-
-          {/* ── New registration BELOW ── */}
-          <p style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1rem', marginBottom: '0.3rem' }}>
-            New here?
-          </p>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: '0.9rem' }}>
-            Need to register? Enter your name below.
-          </p>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
+        <div className="join-section">
+          <h2>New profile</h2>
+          <form onSubmit={handleSubmit} className="stack">
+            <label>
+              <span>Name</span>
               <input
                 type="text"
                 value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Enter your name..."
+                onChange={event => setName(event.target.value)}
+                placeholder="Your name"
               />
-              {error && <p className="error-msg">{error}</p>}
-            </div>
-            <button
-              type="submit"
-              className="btn btn-secondary btn-lg"
-              disabled={loading || !name.trim()}
-              style={{ width: '100%' }}
-            >
-              {loading ? 'Joining...' : 'Register & Enter →'}
+            </label>
+            {error && <p className="error-msg">{error}</p>}
+            <button type="submit" className="btn btn-primary btn-lg" disabled={loading || !name.trim()}>
+              {loading ? 'Joining...' : 'Enter Muzak'}
             </button>
           </form>
-
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }

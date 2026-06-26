@@ -1,72 +1,30 @@
-import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+
+const ITEMS = [
+  { path: '/', icon: '♪', label: 'Home' },
+  { path: '/rounds', icon: '□', label: 'Rounds' },
+  { path: '/leaderboard', icon: '★', label: 'Board' },
+  { path: '/players', icon: '●', label: 'Players' },
+  { path: '/admin', icon: '!', label: 'Admin' },
+]
 
 export default function Nav() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [menuOpen, setMenuOpen] = useState(false)
-
-  const go = (path) => {
-    navigate(path)
-    setMenuOpen(false)
-  }
-
-  const isMenu = ['/archive', '/history', '/leaderboard', '/settings'].includes(location.pathname)
 
   return (
-    <>
-      {menuOpen && (
-        <div
-          style={{ position:'fixed', inset:0, zIndex:150 }}
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-
-      {menuOpen && (
-        <div className="menu-dropdown">
-          <button className="menu-dropdown-item" onClick={() => go('/players')}>
-            👥 Players
-          </button>
-          <button className="menu-dropdown-item" onClick={() => go('/archive')}>
-            📀 Song Archive
-          </button>
-          <button className="menu-dropdown-item" onClick={() => go('/history')}>
-            🗂️ Round History
-          </button>
-          <button className="menu-dropdown-item" onClick={() => go('/leaderboard')}>
-            🏆 Leaderboard
-          </button>
-          <button className="menu-dropdown-item" onClick={() => go('/settings')}>
-            ⚙️ Settings
-          </button>
-        </div>
-      )}
-
-      <nav className="nav">
+    <nav className="nav" aria-label="Main navigation">
+      {ITEMS.map(item => (
         <button
-          className={`nav-item ${location.pathname === '/' ? 'active' : ''}`}
-          onClick={() => go('/')}
+          type="button"
+          key={item.path}
+          className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+          onClick={() => navigate(item.path)}
         >
-          <span className="nav-icon">🎵</span>
-          Home
+          <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+          <span>{item.label}</span>
         </button>
-
-        <button
-          className={`nav-item ${location.pathname === '/queue' ? 'active' : ''}`}
-          onClick={() => go('/queue')}
-        >
-          <span className="nav-icon">📋</span>
-          Round Queue
-        </button>
-
-        <button
-          className={`nav-item ${isMenu ? 'active' : ''}`}
-          onClick={() => setMenuOpen(o => !o)}
-        >
-          <span className="nav-icon">☰</span>
-          Menu
-        </button>
-      </nav>
-    </>
+      ))}
+    </nav>
   )
 }

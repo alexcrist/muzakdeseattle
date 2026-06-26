@@ -1,42 +1,42 @@
-import { useState, useEffect } from 'react'
-import { useCountdown } from '../lib/rounds.js'
+import { useEffect, useState } from 'react'
+import { formatCountdownParts } from '../lib/schedule.js'
 
-export default function Countdown({ deadline, label }) {
-  const [tick, setTick] = useState(0)
+export default function Countdown({ target, label }) {
+  const [, setTick] = useState(0)
 
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 1000)
+    const id = setInterval(() => setTick(tick => tick + 1), 1000)
     return () => clearInterval(id)
   }, [])
 
-  const { days, hours, minutes, seconds, expired } = useCountdown(deadline)
+  const parts = formatCountdownParts(target)
 
-  if (expired) {
-    return <p style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>Deadline passed — refreshing...</p>
+  if (parts.expired) {
+    return (
+      <div className="countdown-card">
+        <span className="countdown-label">{label || 'Next phase'}</span>
+        <span className="countdown-expired">Refreshing...</span>
+      </div>
+    )
   }
 
+  const units = [
+    ['days', parts.days],
+    ['hrs', parts.hours],
+    ['min', parts.minutes],
+    ['sec', parts.seconds],
+  ].filter(([unit, value]) => unit !== 'days' || value > 0)
+
   return (
-    <div>
-      {label && <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text3)', marginBottom: '0.4rem' }}>{label}</p>}
+    <div className="countdown-card">
+      {label && <span className="countdown-label">{label}</span>}
       <div className="countdown">
-        {days > 0 && (
-          <div className="countdown-unit">
-            <span className="num">{days}</span>
-            <span className="lbl">days</span>
-          </div>
-        )}
-        <div className="countdown-unit">
-          <span className="num">{String(hours).padStart(2,'0')}</span>
-          <span className="lbl">hrs</span>
-        </div>
-        <div className="countdown-unit">
-          <span className="num">{String(minutes).padStart(2,'0')}</span>
-          <span className="lbl">min</span>
-        </div>
-        <div className="countdown-unit">
-          <span className="num">{String(seconds).padStart(2,'0')}</span>
-          <span className="lbl">sec</span>
-        </div>
+        {units.map(([unit, value]) => (
+          <span className="countdown-unit" key={unit}>
+            <strong>{String(value).padStart(unit === 'days' ? 1 : 2, '0')}</strong>
+            <span>{unit}</span>
+          </span>
+        ))}
       </div>
     </div>
   )

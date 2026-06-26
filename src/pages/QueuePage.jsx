@@ -1,309 +1,297 @@
-import { useState, useEffect } from 'react'
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { supabase } from '../lib/supabase.js'
+import { useEffect, useMemo, useState } from 'react'
 import { usePlayer, useSettings } from '../App.jsx'
-import { formatDeadline } from '../lib/rounds.js'
+import Avatar from '../components/Avatar.jsx'
+import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
+import { addDays, formatPacificDate, getLeagueContext, getRoundState, getRoundTiming, PHASES } from '../lib/schedule.js'
+import { supabase } from '../lib/supabase.js'
 
-// ── Sortable queue item ─────────────────────────────────────────────────────
-function SortableRoundItem({ round, index, pendingCount, onPositionInput }) {
-  const {
-    attributes, listeners, setNodeRef,
-    transform, transition, isDragging,
-  } = useSortable({ id: round.id })
+async function fetchRoundsData() {
+  const [
+    { data: rounds },
+    { data: songs },
+    { data: votes },
+    { data: groups },
+    { data: groupSongs },
+  ] = await Promise.all([
+    supabase.from('rounds').select('*, players(id, name, avatar_url, avatar_color)').order('queue_position'),
+    supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)').order('created_at'),
+    supabase.from('votes').select('*'),
+    supabase.from('duplicate_groups').select('*'),
+    supabase.from('duplicate_group_songs').select('*'),
+  ])
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+  return {
+    rounds: rounds || [],
+    songs: songs || [],
+    votes: votes || [],
+    groups: groups || [],
+    groupSongs: groupSongs || [],
   }
-
-  const isLocked = round.status === 'complete' || round.status === 'submission' || round.status === 'voting'
-
-  let label = null
-  if (round.status === 'complete')    label = <span className="badge badge-complete">Complete</span>
-  else if (round.status === 'submission') label = <span className="badge badge-submission">Active — Submissions</span>
-  else if (round.status === 'voting') label = <span className="badge badge-voting">Active — Voting</span>
-  else if (index === 0)               label = <span className="badge badge-voting" style={{ background: '#1a2a3a', color: 'var(--accent3)', borderColor: '#2a4a6a' }}>Up Next</span>
-  else                                label = <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text3)' }}>#{index + 1}</span>
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`queue-item ${isDragging ? 'dragging' : ''} ${isLocked ? 'locked' : ''}`}
-    >
-      {/* Drag handle — only for reorderable items */}
-      {!isLocked ? (
-        <span className="drag-handle" {...attributes} {...listeners}>⠿</span>
-      ) : (
-        <span style={{ width: '1.5rem', display: 'inline-block' }} />
-      )}
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
-          {label}
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', letterSpacing: '0.04em', color: 'var(--text)' }}>
-            {round.theme_name}
-          </span>
-        </div>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text3)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {round.theme_description}
-        </p>
-        {round.status === 'submission' && round.submission_deadline && (
-          <p style={{ fontSize: '0.75rem', color: 'var(--text3)', marginTop: '0.2rem', fontFamily: 'var(--font-mono)' }}>
-            Submissions close: {formatDeadline(round.submission_deadline)}
-          </p>
-        )}
-        {round.status === 'voting' && round.voting_deadline && (
-          <p style={{ fontSize: '0.75rem', color: 'var(--text3)', marginTop: '0.2rem', fontFamily: 'var(--font-mono)' }}>
-            Voting closes: {formatDeadline(round.voting_deadline)}
-          </p>
-        )}
-        {round.submitted_by_name && (
-          <p style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: '0.15rem' }}>
-            Added by <span style={{ color: 'var(--accent3)' }}>{round.submitted_by_name}</span>
-          </p>
-        )}
-      </div>
-    </div>
-  )
 }
 
-// ── Main Queue Page ─────────────────────────────────────────────────────────
-export default function QueuePage() {
+export default function RoundsPage() {
   const { player } = usePlayer()
   const { settings } = useSettings()
-  const [rounds, setRounds] = useState([])
+  const [data, setData] = useState({ rounds: [], songs: [], votes: [], groups: [], groupSongs: [] })
   const [loading, setLoading] = useState(true)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [form, setForm] = useState({
-    theme_name: '',
-    theme_description: '',
-    custom_sub_hours: '',
-    custom_vote_hours: '',
-  })
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState({ theme_name: '', theme_description: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-
-  async function loadRounds() {
-    const { data } = await supabase
-      .from('rounds')
-      .select('*, players(name)')
-      .order('queue_position', { ascending: true })
-
-    const enriched = (data || []).map(r => ({
-      ...r,
-      submitted_by_name: r.players?.name || null,
-    }))
-    setRounds(enriched)
+  async function load() {
+    const next = await fetchRoundsData()
+    setData(next)
     setLoading(false)
   }
 
   useEffect(() => {
-    loadRounds()
-    const sub = supabase
-      .channel('rounds-queue')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds' }, loadRounds)
+    load()
+    const channel = supabase
+      .channel('rounds-season-2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
       .subscribe()
-    return () => supabase.removeChannel(sub)
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  // Split into locked (complete/active) and pending (reorderable)
-  const locked = rounds.filter(r => r.status === 'complete' || r.status === 'submission' || r.status === 'voting')
-  const pending = rounds.filter(r => r.status === 'pending')
+  const context = useMemo(() => getLeagueContext(data.rounds, settings), [data.rounds, settings])
+  const roundRows = context.orderedRounds.map((round, index) => ({
+    round,
+    index,
+    state: getRoundState(round, index, settings),
+    timing: getRoundTiming(round, index, settings),
+  }))
+  const current = roundRows.filter(row => row.state === 'current')
+  const upcoming = roundRows.filter(row => row.state === 'upcoming')
+  const past = roundRows.filter(row => row.state === 'past').reverse()
 
-  async function handleDragEnd(event) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const oldIndex = pending.findIndex(r => r.id === active.id)
-    const newIndex = pending.findIndex(r => r.id === over.id)
-    const reordered = arrayMove(pending, oldIndex, newIndex)
-
-    // Optimistic update
-    setRounds([...locked, ...reordered])
-
-    // Persist new positions (pending items start after all locked items)
-    const basePosition = locked.length
-    await Promise.all(
-      reordered.map((r, i) =>
-        supabase.from('rounds').update({ queue_position: basePosition + i }).eq('id', r.id)
-      )
-    )
-  }
-
-  async function handlePositionInput(roundId, newIndex) {
-    const clamped = Math.max(0, Math.min(newIndex, pending.length - 1))
-    const oldIndex = pending.findIndex(r => r.id === roundId)
-    if (oldIndex === clamped) return
-
-    const reordered = arrayMove(pending, oldIndex, clamped)
-    setRounds([...locked, ...reordered])
-
-    const basePosition = locked.length
-    await Promise.all(
-      reordered.map((r, i) =>
-        supabase.from('rounds').update({ queue_position: basePosition + i }).eq('id', r.id)
-      )
-    )
-  }
-
-  async function handleAddRound(e) {
-    e.preventDefault()
+  async function handleAdd(event) {
+    event.preventDefault()
     if (!form.theme_name.trim() || !form.theme_description.trim()) {
-      setError('Theme name and description are required.')
+      setError('Theme and description are required.')
       return
     }
+
     setSaving(true)
     setError('')
+    const nextPosition = context.orderedRounds.length
+    const weekStart = addDays(context.startDate, nextPosition * 7)
 
-    // Determine deadlines if there's an active submission round
-    // (for now, pending rounds inherit defaults; deadlines are set when they go active)
-    const nextPosition = rounds.length
-
-    const { error: err } = await supabase.from('rounds').insert({
+    const { error: insertError } = await supabase.from('rounds').insert({
       theme_name: form.theme_name.trim(),
       theme_description: form.theme_description.trim(),
       queue_position: nextPosition,
-      status: 'pending',
       submitted_by_player_id: player.id,
-      // Store custom overrides in submission/voting deadline fields temporarily as hours
-      // They'll be applied when the round goes active in tickRoundTransitions
-      // We store custom hours in a note field via description suffix for simplicity
-      // Actually: store as negative numbers to signal "custom hours" pre-activation
+      week_start_date: weekStart,
+      is_archived: false,
     })
 
-    if (err) {
-      setError('Failed to add round. Try again.')
-      setSaving(false)
+    setSaving(false)
+    if (insertError) {
+      setError('Could not add that round.')
       return
     }
 
-    setForm({ theme_name: '', theme_description: '', custom_sub_hours: '', custom_vote_hours: '' })
-    setShowAddForm(false)
-    setSaving(false)
-    setSuccess('Round added to the queue!')
-    setTimeout(() => setSuccess(''), 3000)
+    setForm({ theme_name: '', theme_description: '' })
+    setShowAdd(false)
+    load()
   }
 
-  if (loading) return <div className="page"><p style={{ color: 'var(--text3)' }}>loading...</p></div>
+  async function moveRound(round, direction) {
+    const future = upcoming.map(row => row.round)
+    const currentIndex = future.findIndex(item => item.id === round.id)
+    const nextIndex = currentIndex + direction
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= future.length) return
+
+    const reordered = [...future]
+    const [item] = reordered.splice(currentIndex, 1)
+    reordered.splice(nextIndex, 0, item)
+
+    const firstFuturePosition = upcoming[0].round.queue_position
+    await Promise.all(reordered.map((itemRound, offset) => {
+      const queuePosition = firstFuturePosition + offset
+      return supabase
+        .from('rounds')
+        .update({
+          queue_position: queuePosition,
+          week_start_date: addDays(context.startDate, queuePosition * 7),
+        })
+        .eq('id', itemRound.id)
+    }))
+    load()
+  }
+
+  if (loading) {
+    return (
+      <main className="page">
+        <p className="muted">Loading rounds...</p>
+      </main>
+    )
+  }
 
   return (
-    <div className="page">
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+    <main className="page">
+      <section className="page-header">
         <div>
-          <h2>Round Queue</h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text3)', marginTop: '0.2rem' }}>
-            Drag or use the number box to reorder upcoming rounds.
-          </p>
+          <p className="eyebrow">Queue and history</p>
+          <h1>Rounds</h1>
+          <p>One place for what is happening now, what is coming up, and what already happened.</p>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowAddForm(s => !s)}
-        >
-          {showAddForm ? '✕ Cancel' : '+ Add Round'}
+        <button type="button" className="btn btn-primary" onClick={() => setShowAdd(value => !value)}>
+          {showAdd ? 'Close' : 'Add round'}
         </button>
-      </div>
+      </section>
 
-      {success && <p className="success-msg" style={{ marginBottom: '1rem' }}>{success}</p>}
-
-      {/* Add round form */}
-      {showAddForm && (
-        <div className="card" style={{ marginBottom: '1.5rem', borderColor: 'rgba(232,197,71,0.3)' }}>
-          <h3 style={{ marginBottom: '1rem' }}>New Round</h3>
-          <form onSubmit={handleAddRound}>
-            <div className="form-group">
-              <label>Theme Name *</label>
+      {showAdd && (
+        <section className="card add-round-card">
+          <h2>New round</h2>
+          <form className="stack" onSubmit={handleAdd}>
+            <label>
+              <span>Theme</span>
               <input
-                type="text"
                 value={form.theme_name}
-                onChange={e => setForm(f => ({ ...f, theme_name: e.target.value }))}
-                placeholder="e.g. Songs that got you through a breakup"
+                onChange={event => setForm(f => ({ ...f, theme_name: event.target.value }))}
+                placeholder="Songs for a fake movie trailer"
                 autoFocus
               />
-            </div>
-            <div className="form-group">
-              <label>Theme Description *</label>
+            </label>
+            <label>
+              <span>Description</span>
               <textarea
                 value={form.theme_description}
-                onChange={e => setForm(f => ({ ...f, theme_description: e.target.value }))}
-                placeholder="Give players some context or rules for this theme..."
+                onChange={event => setForm(f => ({ ...f, theme_description: event.target.value }))}
                 rows={3}
+                placeholder="Give everyone the prompt."
               />
-            </div>
-
+            </label>
             {error && <p className="error-msg">{error}</p>}
-
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Adding...' : 'Add to Queue →'}
+              {saving ? 'Adding...' : 'Add to schedule'}
             </button>
           </form>
-        </div>
+        </section>
       )}
 
-      {/* Locked rounds (complete + active) */}
-      {locked.map((round, i) => (
-        <SortableRoundItem
-          key={round.id}
-          round={round}
-          index={i}
-          pendingCount={0}
-          onPositionInput={() => {}}
-        />
-      ))}
+      <RoundSection title="Now" rows={current}>
+        {current.map(row => (
+          <RoundCard key={row.round.id} row={row} settings={settings} currentPhase={context.phase} />
+        ))}
+      </RoundSection>
 
-      {/* Pending rounds — sortable */}
-      {pending.length === 0 && (
-        <div className="empty-state" style={{ padding: '2rem 1rem' }}>
-          <div className="emoji">📭</div>
-          <p>No rounds in the queue yet.</p>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text3)', marginTop: '0.25rem' }}>
-            Add one above to keep the league going.
-          </p>
+      <RoundSection title="Upcoming" rows={upcoming}>
+        {upcoming.map((row, index) => (
+          <RoundCard
+            key={row.round.id}
+            row={row}
+            settings={settings}
+            controls={
+              <div className="round-controls">
+                <button type="button" className="icon-btn" onClick={() => moveRound(row.round, -1)} disabled={index === 0}>↑</button>
+                <button type="button" className="icon-btn" onClick={() => moveRound(row.round, 1)} disabled={index === upcoming.length - 1}>↓</button>
+              </div>
+            }
+          />
+        ))}
+      </RoundSection>
+
+      <RoundSection title="History" rows={past}>
+        {past.map(row => (
+          <HistoryRound
+            key={row.round.id}
+            row={row}
+            songs={data.songs.filter(song => song.round_id === row.round.id)}
+            votes={data.votes.filter(vote => vote.round_id === row.round.id)}
+            groups={data.groups.filter(group => group.round_id === row.round.id)}
+            groupSongs={data.groupSongs}
+          />
+        ))}
+      </RoundSection>
+    </main>
+  )
+}
+
+function RoundSection({ title, rows, children }) {
+  return (
+    <section className="round-section">
+      <div className="section-heading">
+        <h2>{title}</h2>
+        <span className="soft-tag">{rows.length}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="empty-state compact">
+          <p>No {title.toLowerCase()} rounds.</p>
         </div>
-      )}
+      ) : children}
+    </section>
+  )
+}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={pending.map(r => r.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {pending.map((round, i) => (
-            <SortableRoundItem
-              key={round.id}
-              round={round}
-              index={i}
-              pendingCount={pending.length}
-              onPositionInput={handlePositionInput}
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
-    </div>
+function RoundCard({ row, currentPhase, controls }) {
+  const { round, state, timing } = row
+  const phaseLabel = state === 'current'
+    ? PHASES[currentPhase]?.label || 'Current'
+    : state === 'upcoming'
+      ? 'Scheduled'
+      : 'Past'
+
+  return (
+    <article className={`round-card ${state}`}>
+      <div className="round-card-main">
+        <span className={`phase-pill phase-${state === 'current' ? currentPhase : state === 'upcoming' ? 'off' : 'appreciation'}`}>{phaseLabel}</span>
+        <h3>{round.theme_name}</h3>
+        <p>{round.theme_description}</p>
+        <div className="round-meta">
+          <span>Week of {formatPacificDate(timing.weekStart)}</span>
+          {round.players && (
+            <span>
+              <Avatar player={round.players} size="xs" />
+              Added by {round.players.name}
+            </span>
+          )}
+        </div>
+      </div>
+      {controls}
+    </article>
+  )
+}
+
+function HistoryRound({ row, songs, votes, groups, groupSongs }) {
+  const groupIds = new Set(groups.map(group => group.id))
+  const entries = buildSongEntries({
+    songs,
+    votes,
+    duplicateGroups: groups,
+    groupSongs: groupSongs.filter(item => groupIds.has(item.group_id)),
+  })
+  const top = entries.slice(0, 4)
+
+  return (
+    <details className="history-round">
+      <summary>
+        <span>
+          <strong>{row.round.theme_name}</strong>
+          <small>Week of {formatPacificDate(row.timing.weekStart)}</small>
+        </span>
+        <span className="soft-tag">{entries.length} songs</span>
+      </summary>
+      <div className="history-list">
+        {top.length === 0 ? (
+          <p className="muted">No songs were submitted.</p>
+        ) : top.map((entry, index) => (
+          <div className="history-row" key={entry.id}>
+            <span className="song-number">{index + 1}</span>
+            <div>
+              <strong>{entry.title}</strong>
+              <p>{entry.artist} · {entrySubmitterText(entry)}</p>
+            </div>
+            <span className="score-mini">{entry.totalPoints}</span>
+          </div>
+        ))}
+      </div>
+    </details>
   )
 }

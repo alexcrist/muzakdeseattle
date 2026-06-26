@@ -1,69 +1,127 @@
-import { useState, useEffect, createContext, useContext } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { supabase } from './lib/supabase.js'
-import { getStoredPlayer, storePlayer } from './lib/identity.js'
-import { tickRoundTransitions } from './lib/rounds.js'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { getCurrentMonday } from './lib/schedule.js'
+import { clearPlayer, getStoredPlayer, storePlayer } from './lib/identity.js'
+import { isSupabaseConfigured, supabase } from './lib/supabase.js'
 
-import Nav from './components/Nav.jsx'
-import PauseBanner from './components/PauseBanner.jsx'
-import JoinScreen from './pages/JoinScreen.jsx'
+import AdminPage from './pages/SettingsPage.jsx'
 import HomePage from './pages/HomePage.jsx'
-import QueuePage from './pages/QueuePage.jsx'
-import ArchivePage from './pages/ArchivePage.jsx'
-import RoundHistoryPage from './pages/RoundHistoryPage.jsx'
+import JoinScreen from './pages/JoinScreen.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
-import SettingsPage from './pages/SettingsPage.jsx'
+import Nav from './components/Nav.jsx'
 import PlayerListPage from './pages/PlayerListPage.jsx'
+import RoundsPage from './pages/QueuePage.jsx'
 
-// ── Player context ──────────────────────────────
 export const PlayerContext = createContext(null)
 export const SettingsContext = createContext(null)
-export function usePlayer() { return useContext(PlayerContext) }
-export function useSettings() { return useContext(SettingsContext) }
+
+export function usePlayer() {
+  return useContext(PlayerContext)
+}
+
+export function useSettings() {
+  return useContext(SettingsContext)
+}
+
+function SetupRequired() {
+  return (
+    <main className="setup-screen">
+      <div className="setup-panel">
+        <span className="bubble-mark">M2</span>
+        <h1>Muzak Season 2</h1>
+        <p>
+          Add Supabase environment variables to run the Season 2 database.
+          The setup SQL and Netlify notes are in `SETUP.md`.
+        </p>
+      </div>
+    </main>
+  )
+}
+
+async function loadSettings() {
+  const { data, error } = await supabase
+    .from('league_settings')
+    .select('*')
+    .eq('id', 1)
+    .single()
+
+  if (error || !data) return null
+  return {
+    ...data,
+    schedule_start_date: data.schedule_start_date || getCurrentMonday(),
+  }
+}
 
 export default function App() {
   const [player, setPlayer] = useState(getStoredPlayer())
   const [settings, setSettings] = useState(null)
-  const [loadingSettings, setLoadingSettings] = useState(true)
+  const [loading, setLoading] = useState(true)
 
-  // Load league settings
   useEffect(() => {
-    async function loadSettings() {
-      const { data } = await supabase
-        .from('league_settings')
-        .select('*')
-        .eq('id', 1)
-        .single()
-      setSettings(data)
-      setLoadingSettings(false)
+    if (!isSupabaseConfigured) {
+      setLoading(false)
+      return undefined
     }
-    loadSettings()
 
-    // Subscribe to settings changes
-    const sub = supabase
-      .channel('settings')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'league_settings' }, () => loadSettings())
+    let mounted = true
+
+    async function boot() {
+      const nextSettings = await loadSettings()
+      if (mounted) setSettings(nextSettings)
+
+      const stored = getStoredPlayer()
+      if (stored?.id) {
+        const { data } = await supabase
+          .from('players')
+          .select('*')
+          .eq('id', stored.id)
+          .single()
+        if (data?.active) {
+          storePlayer(data)
+          if (mounted) setPlayer(data)
+        } else if (!data) {
+          clearPlayer()
+          if (mounted) setPlayer(null)
+        }
+      }
+
+      if (mounted) setLoading(false)
+    }
+
+    boot()
+
+    const settingsSub = supabase
+      .channel('settings-season-2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'league_settings' }, async () => {
+        const nextSettings = await loadSettings()
+        if (mounted) setSettings(nextSettings)
+      })
       .subscribe()
-    return () => supabase.removeChannel(sub)
+
+    return () => {
+      mounted = false
+      supabase.removeChannel(settingsSub)
+    }
   }, [])
 
-  // Tick round transitions on load and every 60s
-  useEffect(() => {
-    tickRoundTransitions()
-    const interval = setInterval(tickRoundTransitions, 60000)
-    return () => clearInterval(interval)
-  }, [])
-
-  function handleJoin(p) {
-    storePlayer(p)
-    setPlayer(p)
+  function handleJoin(nextPlayer) {
+    storePlayer(nextPlayer)
+    setPlayer(nextPlayer)
   }
 
-  if (loadingSettings) {
+  function handlePlayerUpdate(nextPlayer) {
+    storePlayer(nextPlayer)
+    setPlayer(nextPlayer)
+  }
+
+  if (!isSupabaseConfigured) return <SetupRequired />
+
+  if (loading) {
     return (
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
-        <span style={{ color:'var(--text3)', fontFamily:'var(--font-mono)' }}>loading...</span>
-      </div>
+      <main className="loading-screen">
+        <span className="bubble-mark">M2</span>
+        <p>Loading Muzak...</p>
+      </main>
     )
   }
 
@@ -76,22 +134,21 @@ export default function App() {
   }
 
   return (
-    <PlayerContext.Provider value={{ player, setPlayer }}>
+    <PlayerContext.Provider value={{ player, setPlayer: handlePlayerUpdate }}>
       <SettingsContext.Provider value={{ settings, setSettings }}>
         <BrowserRouter>
-          {settings?.is_paused && <PauseBanner />}
-          <div style={{ paddingTop: '0.5rem' }}>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/queue" element={<QueuePage />} />
-              <Route path="/archive" element={<ArchivePage />} />
-              <Route path="/history" element={<RoundHistoryPage />} />
-              <Route path="/leaderboard" element={<LeaderboardPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/players" element={<PlayerListPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </div>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/rounds" element={<RoundsPage />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
+            <Route path="/players" element={<PlayerListPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/queue" element={<Navigate to="/rounds" replace />} />
+            <Route path="/archive" element={<Navigate to="/rounds" replace />} />
+            <Route path="/history" element={<Navigate to="/rounds" replace />} />
+            <Route path="/settings" element={<Navigate to="/admin" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
           <Nav />
         </BrowserRouter>
       </SettingsContext.Provider>

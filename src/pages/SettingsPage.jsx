@@ -1,366 +1,422 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase.js'
+import { useEffect, useMemo, useState } from 'react'
 import { useSettings } from '../App.jsx'
-import { FLAVOR } from '../lib/flavor.js'
-import { pauseLeague, unpauseLeague } from '../lib/rounds.js'
+import Avatar from '../components/Avatar.jsx'
+import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
+import {
+  addDays,
+  DAY_KEYS,
+  DAY_LABELS,
+  DEFAULT_WEEKLY_TEMPLATE,
+  formatPacificDate,
+  getCurrentMonday,
+  getLeagueContext,
+  getRoundState,
+  normalizeTemplate,
+  PHASES,
+} from '../lib/schedule.js'
+import { supabase } from '../lib/supabase.js'
 
-export default function SettingsPage() {
+const PHASE_OPTIONS = ['submission', 'voting', 'appreciation', 'off']
+
+async function fetchAdminData() {
+  const [
+    { data: rounds },
+    { data: songs },
+    { data: votes },
+    { data: groups },
+    { data: groupSongs },
+  ] = await Promise.all([
+    supabase.from('rounds').select('*').order('queue_position'),
+    supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)').order('created_at'),
+    supabase.from('votes').select('*'),
+    supabase.from('duplicate_groups').select('*').order('created_at'),
+    supabase.from('duplicate_group_songs').select('*'),
+  ])
+
+  return {
+    rounds: rounds || [],
+    songs: songs || [],
+    votes: votes || [],
+    groups: groups || [],
+    groupSongs: groupSongs || [],
+  }
+}
+
+export default function AdminPage() {
   const { settings, setSettings } = useSettings()
-  const [form, setForm] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [pausing, setPausing] = useState(false)
-  const [advancing, setAdvancing] = useState(false)
+  const [data, setData] = useState({ rounds: [], songs: [], votes: [], groups: [], groupSongs: [] })
+  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState({
+    league_name: settings?.league_name || 'Muzak de Seattle',
+    season_label: settings?.season_label || 'Season 2',
+    points_per_player: settings?.points_per_player || 10,
+    schedule_start_date: settings?.schedule_start_date || getCurrentMonday(),
+    weekly_phase_template: normalizeTemplate(settings?.weekly_phase_template || DEFAULT_WEEKLY_TEMPLATE),
+  })
+  const [message, setMessage] = useState('')
 
-  const [firstRoundSetup, setFirstRoundSetup] = useState(null)
-  const [activeRound, setActiveRound] = useState(null)
-  const [submissionCount, setSubmissionCount] = useState(0)
-  const [voterCount, setVoterCount] = useState(0)
-  const [totalPlayers, setTotalPlayers] = useState(0)
-
-  useEffect(() => {
-    if (settings) {
-      setForm({
-        league_name: settings.league_name || 'Music League',
-        points_per_player: settings.points_per_player || 10,
-        default_submission_hours: settings.default_submission_hours || 48,
-        default_voting_hours: settings.default_voting_hours || 48,
-      })
-    }
-  }, [settings])
-
-  async function loadRoundData() {
-    // Active round
-    const { data: active } = await supabase
-      .from('rounds')
-      .select('*')
-      .in('status', ['submission', 'voting'])
-      .order('queue_position', { ascending: true })
-      .limit(1)
-      .single()
-    setActiveRound(active || null)
-
-    // First pending round (for start league button)
-    const { data: pending } = await supabase
-      .from('rounds')
-      .select('*')
-      .eq('status', 'pending')
-      .order('queue_position', { ascending: true })
-      .limit(1)
-      .single()
-    setFirstRoundSetup(pending || null)
-
-    // Total ACTIVE players
-    const { count: playerCount } = await supabase
-      .from('players')
-      .select('*', { count: 'exact', head: true })
-      .eq('active', true)
-    setTotalPlayers(playerCount || 0)
-
-    if (active) {
-      // Submission count
-      const { count: subCount } = await supabase
-        .from('songs')
-        .select('*', { count: 'exact', head: true })
-        .eq('round_id', active.id)
-      setSubmissionCount(subCount || 0)
-
-      // Voter count
-      const { data: allVotes } = await supabase
-        .from('votes')
-        .select('voter_player_id')
-        .eq('round_id', active.id)
-      const distinct = new Set((allVotes || []).map(v => v.voter_player_id)).size
-      setVoterCount(distinct)
-    }
+  async function load() {
+    const next = await fetchAdminData()
+    setData(next)
+    setLoading(false)
   }
 
   useEffect(() => {
-    loadRoundData()
+    load()
+    const channel = supabase
+      .channel('admin-season-2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rounds' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
+      .subscribe()
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  async function handleSave(e) {
-    e.preventDefault()
-    setSaving(true)
-    setSaved(false)
-    const { data, error } = await supabase
+  useEffect(() => {
+    if (!settings) return
+    setForm({
+      league_name: settings.league_name || 'Muzak de Seattle',
+      season_label: settings.season_label || 'Season 2',
+      points_per_player: settings.points_per_player || 10,
+      schedule_start_date: settings.schedule_start_date || getCurrentMonday(),
+      weekly_phase_template: normalizeTemplate(settings.weekly_phase_template),
+    })
+  }, [settings])
+
+  async function saveSettings(event) {
+    event.preventDefault()
+    const payload = {
+      id: 1,
+      league_name: form.league_name.trim() || 'Muzak de Seattle',
+      season_label: form.season_label.trim() || 'Season 2',
+      points_per_player: Math.max(1, Number(form.points_per_player) || 10),
+      schedule_start_date: form.schedule_start_date || getCurrentMonday(),
+      weekly_phase_template: normalizeTemplate(form.weekly_phase_template),
+      timezone: 'America/Los_Angeles',
+    }
+
+    const { data: saved, error } = await supabase
       .from('league_settings')
-      .update({
-        league_name: form.league_name.trim(),
-        points_per_player: parseInt(form.points_per_player) || 10,
-        default_submission_hours: parseInt(form.default_submission_hours) || 48,
-        default_voting_hours: parseInt(form.default_voting_hours) || 48,
-      })
-      .eq('id', 1)
+      .upsert(payload, { onConflict: 'id' })
       .select()
       .single()
-    if (!error && data) setSettings(data)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
-  }
 
-  async function handlePauseToggle() {
-    setPausing(true)
-    if (settings?.is_paused) {
-      await unpauseLeague()
-    } else {
-      await pauseLeague()
-    }
-    const { data } = await supabase.from('league_settings').select('*').eq('id', 1).single()
-    if (data) setSettings(data)
-    setPausing(false)
-  }
-
-  async function handleStartLeague() {
-    if (!firstRoundSetup) return
-    const subDeadline = new Date()
-    subDeadline.setHours(subDeadline.getHours() + (settings?.default_submission_hours || 48))
-    const votDeadline = new Date(subDeadline)
-    votDeadline.setHours(votDeadline.getHours() + (settings?.default_voting_hours || 48))
-    await supabase.from('rounds').update({
-      status: 'submission',
-      submission_deadline: subDeadline.toISOString(),
-      voting_deadline: votDeadline.toISOString(),
-    }).eq('id', firstRoundSetup.id)
-    await loadRoundData()
-    alert('League started! First round is now open for submissions.')
-  }
-
-  async function handleAdvanceToVoting() {
-    if (!activeRound || activeRound.status !== 'submission') return
-    const confirmed = window.confirm("ok, like, are you really sure you want to end the current phase? like really REALLY sure?")
-    if (!confirmed) return
-    setAdvancing(true)
-    // Set submission deadline to now so tick will advance it,
-    // then directly flip status to voting
-    await supabase.from('rounds').update({
-      status: 'voting',
-      submission_deadline: new Date().toISOString(),
-    }).eq('id', activeRound.id)
-    await loadRoundData()
-    setAdvancing(false)
-    alert('Round advanced to voting! Songs are now revealed.')
-  }
-
-  async function handleAdvanceToResults() {
-    if (!activeRound || activeRound.status !== 'voting') return
-    const confirmed = window.confirm("ok, like, are you really sure you want to end the current phase? like really REALLY sure?")
-    if (!confirmed) return
-    setAdvancing(true)
-    // Flip to complete, then start next pending round if exists
-    await supabase.from('rounds').update({
-      status: 'complete',
-      voting_deadline: new Date().toISOString(),
-    }).eq('id', activeRound.id)
-
-    // Start next pending round
-    const { data: nextRounds } = await supabase
-      .from('rounds')
-      .select('*')
-      .eq('status', 'pending')
-      .order('queue_position', { ascending: true })
-      .limit(1)
-
-    if (nextRounds && nextRounds.length > 0) {
-      const next = nextRounds[0]
-      const subDeadline = new Date()
-      subDeadline.setHours(subDeadline.getHours() + (settings?.default_submission_hours || 48))
-      const votDeadline = new Date(subDeadline)
-      votDeadline.setHours(votDeadline.getHours() + (settings?.default_voting_hours || 48))
-      await supabase.from('rounds').update({
-        status: 'submission',
-        submission_deadline: subDeadline.toISOString(),
-        voting_deadline: votDeadline.toISOString(),
-      }).eq('id', next.id)
+    if (error || !saved) {
+      setMessage('Could not save settings.')
+      return
     }
 
-    await loadRoundData()
-    setAdvancing(false)
-    alert('Voting closed! Results are now live and the next round has started.')
+    await Promise.all(data.rounds.map((round, index) => (
+      supabase
+        .from('rounds')
+        .update({ week_start_date: addDays(payload.schedule_start_date, index * 7) })
+        .eq('id', round.id)
+    )))
+
+    setSettings(saved)
+    setMessage('Settings saved.')
+    load()
   }
 
-  if (!form) return <div className="page"><p style={{ color: 'var(--text3)' }}>loading...</p></div>
-
-  const allSubmitted = totalPlayers > 0 && submissionCount >= totalPlayers
-  const allVoted = totalPlayers > 0 && voterCount >= totalPlayers
+  if (loading) {
+    return (
+      <main className="page">
+        <p className="muted">Loading admin...</p>
+      </main>
+    )
+  }
 
   return (
-    <div className="page">
-      {/* FLAVOR TEXT: Settings warning */}
-      <div style={{
-        background: 'rgba(232, 124, 71, 0.08)',
-        border: '1px solid rgba(232, 124, 71, 0.3)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '1rem 1.25rem',
-        marginBottom: '1.75rem',
-      }}>
-        <p style={{ color: 'var(--accent2)', fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>
-          {FLAVOR.SETTINGS_WARNING}
-        </p>
-      </div>
-
-      {/* Start league button */}
-      {!activeRound && firstRoundSetup && (
-        <div className="card" style={{ marginBottom: '1.5rem', borderColor: 'rgba(71,232,160,0.3)' }}>
-          <h3 style={{ marginBottom: '0.5rem' }}>🚀 Ready to start?</h3>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text2)', marginBottom: '1rem' }}>
-            You have rounds in the queue but the league hasn't started yet.
-          </p>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text3)', marginBottom: '1rem' }}>
-            First round: <strong style={{ color: 'var(--text2)' }}>{firstRoundSetup.theme_name}</strong>
-          </p>
-          <button className="btn btn-primary" onClick={handleStartLeague}>
-            Start the League →
-          </button>
+    <main className="page">
+      <section className="page-header">
+        <div>
+          <p className="eyebrow">Open admin zone</p>
+          <h1>Admin</h1>
+          <p>Everyone can change these controls. Move carefully.</p>
         </div>
-      )}
+      </section>
 
-      {/* Advance to voting — shown during submission phase */}
-      {activeRound?.status === 'submission' && (
-        <div className="card" style={{ marginBottom: '1.5rem', borderColor: allSubmitted ? 'rgba(71,232,160,0.4)' : 'var(--border)' }}>
-          <h3 style={{ marginBottom: '0.4rem' }}>🎵 Submission Phase</h3>
-          <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginBottom: '0.75rem' }}>
-            Current round: <strong style={{ color: 'var(--text)' }}>{activeRound.theme_name}</strong>
-          </p>
-          <p style={{ fontSize: '0.88rem', color: allSubmitted ? 'var(--success)' : 'var(--text3)', marginBottom: '1rem' }}>
-            {allSubmitted
-              ? `✅ All ${totalPlayers} players have submitted!`
-              : `⏳ ${submissionCount} of ${totalPlayers} players have submitted.`}
-          </p>
-          <button
-            className="btn btn-primary"
-            onClick={handleAdvanceToVoting}
-            disabled={advancing}
-          >
-            {advancing ? 'Advancing...' : 'All songs submitted — advance to voting round →'}
-          </button>
+      <section className="warning-panel loud">
+        <strong>No auth, no undo button</strong>
+        <p>This league intentionally trusts the room. Settings, player status, and duplicate merges are public controls.</p>
+      </section>
+
+      <section className="card admin-settings">
+        <div className="section-heading">
+          <h2>League settings</h2>
+          {message && <span className={message.includes('Could not') ? 'error-msg' : 'success-msg'}>{message}</span>}
         </div>
-      )}
 
-      {/* Advance to results — shown during voting phase */}
-      {activeRound?.status === 'voting' && (
-        <div className="card" style={{ marginBottom: '1.5rem', borderColor: allVoted ? 'rgba(71,232,160,0.4)' : 'var(--border)' }}>
-          <h3 style={{ marginBottom: '0.4rem' }}>🗳️ Voting Phase</h3>
-          <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginBottom: '0.75rem' }}>
-            Current round: <strong style={{ color: 'var(--text)' }}>{activeRound.theme_name}</strong>
-          </p>
-          <p style={{ fontSize: '0.88rem', color: allVoted ? 'var(--success)' : 'var(--text3)', marginBottom: '1rem' }}>
-            {allVoted
-              ? `✅ All ${totalPlayers} players have voted!`
-              : `⏳ ${voterCount} of ${totalPlayers} players have voted.`}
-          </p>
-          <button
-            className="btn btn-primary"
-            onClick={handleAdvanceToResults}
-            disabled={advancing}
-          >
-            {advancing ? 'Advancing...' : 'All votes in — close voting and reveal results →'}
-          </button>
-        </div>
-      )}
-
-      {/* Pause toggle */}
-      <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-          <div>
-            <h3 style={{ marginBottom: '0.2rem' }}>
-              {settings?.is_paused ? '⏸ League is Paused' : '▶️ League is Running'}
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text3)' }}>
-              {settings?.is_paused
-                ? 'All deadlines are frozen. Unpause to resume countdowns.'
-                : 'Pause if you need to freeze all timers temporarily.'}
-            </p>
-          </div>
-          <button
-            className={`btn ${settings?.is_paused ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={handlePauseToggle}
-            disabled={pausing}
-          >
-            {pausing ? '...' : settings?.is_paused ? 'Unpause League' : 'Pause League'}
-          </button>
-        </div>
-      </div>
-
-      {/* League settings form */}
-      <div className="card">
-        <h3 style={{ marginBottom: '1.25rem' }}>League Settings</h3>
-        <form onSubmit={handleSave}>
-          <div className="form-group">
-            <label>League Name</label>
-            <input
-              type="text"
-              value={form.league_name}
-              onChange={e => setForm(f => ({ ...f, league_name: e.target.value }))}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Points Per Player Per Round</label>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={form.points_per_player}
-              onChange={e => setForm(f => ({ ...f, points_per_player: e.target.value }))}
-              style={{ maxWidth: '120px' }}
-            />
-            <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginTop: '0.3rem' }}>
-              Each player can allocate this many points per voting round.
-            </p>
+        <form className="stack" onSubmit={saveSettings}>
+          <div className="form-row">
+            <label>
+              <span>League name</span>
+              <input value={form.league_name} onChange={event => setForm(f => ({ ...f, league_name: event.target.value }))} />
+            </label>
+            <label>
+              <span>Season label</span>
+              <input value={form.season_label} onChange={event => setForm(f => ({ ...f, season_label: event.target.value }))} />
+            </label>
           </div>
 
           <div className="form-row">
-            <div className="form-group">
-              <label>Default Submission Period (hours)</label>
+            <label>
+              <span>Points per player</span>
               <input
                 type="number"
                 min="1"
-                value={form.default_submission_hours}
-                onChange={e => setForm(f => ({ ...f, default_submission_hours: e.target.value }))}
+                max="100"
+                value={form.points_per_player}
+                onChange={event => setForm(f => ({ ...f, points_per_player: event.target.value }))}
               />
+            </label>
+            <label>
+              <span>Schedule start Monday</span>
+              <input
+                type="date"
+                value={form.schedule_start_date}
+                onChange={event => setForm(f => ({ ...f, schedule_start_date: event.target.value }))}
+              />
+            </label>
+          </div>
+
+          <ScheduleEditor
+            template={form.weekly_phase_template}
+            onChange={weekly_phase_template => setForm(f => ({ ...f, weekly_phase_template }))}
+          />
+
+          <button type="submit" className="btn btn-primary">Save settings</button>
+        </form>
+      </section>
+
+      <DuplicateMergeTool settings={settings} data={data} onChanged={load} />
+
+      <section className="card setup-notes">
+        <h2>Deployment notes</h2>
+        <p>Season 2 expects a fresh Supabase project and these Netlify environment variables:</p>
+        <code>NEXT_PUBLIC_SUPABASE_URL</code>
+        <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>
+        <p>The app also accepts `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.</p>
+        <p>The full setup SQL and Cloudflare domain notes are in SETUP.md.</p>
+      </section>
+    </main>
+  )
+}
+
+function ScheduleEditor({ template, onChange }) {
+  const normalized = normalizeTemplate(template)
+
+  function setDay(day, phase) {
+    onChange({ ...normalized, [day]: phase })
+  }
+
+  return (
+    <div className="schedule-editor">
+      <div className="section-heading compact">
+        <h3>Weekly phase calendar</h3>
+        <span className="soft-tag">Pacific time</span>
+      </div>
+      <div className="day-grid">
+        {DAY_KEYS.map(day => (
+          <div className="day-tile" key={day}>
+            <strong>{DAY_LABELS[day]}</strong>
+            <div className="segmented">
+              {PHASE_OPTIONS.map(phase => (
+                <button
+                  type="button"
+                  key={phase}
+                  className={normalized[day] === phase ? 'active' : ''}
+                  onClick={() => setDay(day, phase)}
+                >
+                  {PHASES[phase].shortLabel}
+                </button>
+              ))}
             </div>
-            <div className="form-group">
-              <label>Default Voting Period (hours)</label>
-              <input
-                type="number"
-                min="1"
-                value={form.default_voting_hours}
-                onChange={e => setForm(f => ({ ...f, default_voting_hours: e.target.value }))}
-              />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DuplicateMergeTool({ settings, data, onChanged }) {
+  const context = useMemo(() => getLeagueContext(data.rounds, settings), [data.rounds, settings])
+  const eligibleRounds = context.orderedRounds.filter((round, index) => {
+    const state = getRoundState(round, index, settings)
+    return state === 'past' || (state === 'current' && context.phase === 'appreciation')
+  }).reverse()
+  const defaultRound = eligibleRounds[0]
+  const [selectedRoundId, setSelectedRoundId] = useState(defaultRound?.id || '')
+  const [selectedSongIds, setSelectedSongIds] = useState([])
+  const [canonicalSongId, setCanonicalSongId] = useState('')
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!eligibleRounds.some(round => round.id === selectedRoundId)) {
+      setSelectedRoundId(defaultRound?.id || '')
+      setSelectedSongIds([])
+      setCanonicalSongId('')
+    }
+  }, [defaultRound?.id, eligibleRounds, selectedRoundId])
+
+  const selectedRound = data.rounds.find(round => round.id === selectedRoundId)
+  const roundSongs = data.songs.filter(song => song.round_id === selectedRoundId)
+  const roundVotes = data.votes.filter(vote => vote.round_id === selectedRoundId)
+  const roundGroups = data.groups.filter(group => group.round_id === selectedRoundId)
+  const groupIds = new Set(roundGroups.map(group => group.id))
+  const roundGroupSongs = data.groupSongs.filter(row => groupIds.has(row.group_id))
+  const groupedSongIds = new Set(roundGroupSongs.map(row => row.song_id))
+  const entries = buildSongEntries({ songs: roundSongs, votes: roundVotes, duplicateGroups: roundGroups, groupSongs: roundGroupSongs })
+
+  function toggleSong(songId) {
+    setSelectedSongIds(ids => {
+      const next = ids.includes(songId) ? ids.filter(id => id !== songId) : [...ids, songId]
+      if (!next.includes(canonicalSongId)) setCanonicalSongId(next[0] || '')
+      return next
+    })
+  }
+
+  async function createMerge() {
+    if (selectedSongIds.length < 2) {
+      setMessage('Pick at least two songs to merge.')
+      return
+    }
+
+    const canonical = canonicalSongId && selectedSongIds.includes(canonicalSongId)
+      ? canonicalSongId
+      : selectedSongIds[0]
+
+    const { data: group, error } = await supabase
+      .from('duplicate_groups')
+      .insert({
+        round_id: selectedRoundId,
+        canonical_song_id: canonical,
+        label: 'Duplicate submission',
+      })
+      .select()
+      .single()
+
+    if (error || !group) {
+      setMessage('Could not create duplicate merge.')
+      return
+    }
+
+    await supabase.from('duplicate_group_songs').insert(
+      selectedSongIds.map(songId => ({ group_id: group.id, song_id: songId }))
+    )
+
+    setSelectedSongIds([])
+    setCanonicalSongId('')
+    setMessage('Duplicate merge created.')
+    onChanged()
+  }
+
+  async function deleteGroup(groupId) {
+    await supabase.from('duplicate_groups').delete().eq('id', groupId)
+    setMessage('Duplicate merge removed.')
+    onChanged()
+  }
+
+  return (
+    <section className="card duplicate-tool">
+      <div className="section-heading">
+        <h2>Duplicate merge</h2>
+        {message && <span className={message.includes('Could not') || message.includes('Pick') ? 'error-msg' : 'success-msg'}>{message}</span>}
+      </div>
+      <p className="muted">Use this after voting. Votes stay intact; results recalculate with self-votes removed and courtesy points added.</p>
+
+      <label>
+        <span>Round</span>
+        <select
+          value={selectedRoundId}
+          onChange={event => {
+            setSelectedRoundId(event.target.value)
+            setSelectedSongIds([])
+            setCanonicalSongId('')
+            setMessage('')
+          }}
+        >
+          {eligibleRounds.map(round => (
+            <option key={round.id} value={round.id}>{round.theme_name}</option>
+          ))}
+        </select>
+      </label>
+
+      {eligibleRounds.length === 0 ? (
+        <div className="empty-state compact">
+          <p>Duplicate merging opens once a round reaches appreciation.</p>
+        </div>
+      ) : !selectedRound ? (
+        <div className="empty-state compact">
+          <p>Add a round before merging duplicates.</p>
+        </div>
+      ) : (
+        <>
+          <div className="merge-grid">
+            <div>
+              <h3>Songs</h3>
+              <div className="merge-song-list">
+                {roundSongs.map(song => {
+                  const disabled = groupedSongIds.has(song.id)
+                  const selected = selectedSongIds.includes(song.id)
+                  return (
+                    <button
+                      type="button"
+                      key={song.id}
+                      className={`merge-song ${selected ? 'selected' : ''}`}
+                      onClick={() => toggleSong(song.id)}
+                      disabled={disabled}
+                    >
+                      <span>
+                        <strong>{song.title}</strong>
+                        <small>{song.artist} · {song.players?.name || 'Unknown player'}</small>
+                      </span>
+                      {disabled ? <em>Already merged</em> : selected ? <em>Selected</em> : null}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <h3>Canonical display song</h3>
+              <select value={canonicalSongId} onChange={event => setCanonicalSongId(event.target.value)} disabled={selectedSongIds.length === 0}>
+                <option value="">Use first selected</option>
+                {selectedSongIds.map(songId => {
+                  const song = roundSongs.find(item => item.id === songId)
+                  return song ? <option key={song.id} value={song.id}>{song.title} · {song.artist}</option> : null
+                })}
+              </select>
+              <button type="button" className="btn btn-primary" onClick={createMerge} disabled={selectedSongIds.length < 2}>
+                Merge selected songs
+              </button>
             </div>
           </div>
 
-          <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: '1rem' }}>
-            Example: 48 hours = 2 days. These are applied to each new round when it becomes active.
-            1 week = 168 hours.
-          </p>
-
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Settings'}
-          </button>
-        </form>
-      </div>
-
-      {/* Danger zone */}
-      <div className="card" style={{ marginTop: '1.5rem', borderColor: 'rgba(232,80,71,0.3)' }}>
-        <h3 style={{ marginBottom: '0.5rem', color: 'var(--danger)' }}>Danger Zone</h3>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text3)', marginBottom: '0.75rem' }}>
-          These actions are permanent. Be absolutely sure before proceeding.
-        </p>
-        <button
-          className="btn btn-danger btn-sm"
-          onClick={() => {
-            if (window.confirm('Are you SURE you want to reset your identity? You will be logged out and need to re-enter your name.')) {
-              localStorage.clear()
-              window.location.reload()
-            }
-          }}
-        >
-          Reset My Identity (log out)
-        </button>
-      </div>
-    </div>
+          {roundGroups.length > 0 && (
+            <div className="existing-merges">
+              <h3>Existing merges</h3>
+              {entries.filter(entry => entry.isDuplicate).map(entry => (
+                <div className="existing-merge" key={entry.id}>
+                  <div>
+                    <strong>{entry.title}</strong>
+                    <p>{entrySubmitterText(entry)} · {entry.totalPoints} pts total</p>
+                    <p>{entry.votePoints} vote pts + {entry.courtesyPoints} courtesy pts{entry.ineligiblePoints ? ` · ${entry.ineligiblePoints} self-vote pts removed` : ''}</p>
+                  </div>
+                  <div className="avatar-cluster">
+                    {entry.submitters.map(submitter => <Avatar key={submitter.id} player={submitter} size="sm" />)}
+                  </div>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => deleteGroup(entry.group_id)}>
+                    Remove merge
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
   )
 }

@@ -1,221 +1,222 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { usePlayer, useSettings } from '../App.jsx'
+import Avatar from '../components/Avatar.jsx'
+import { buildLeaderboard } from '../lib/scoring.js'
+import { getScoredRoundIds } from '../lib/schedule.js'
 import { supabase } from '../lib/supabase.js'
-import { usePlayer } from '../App.jsx'
+
+async function fetchPlayersData() {
+  const [
+    { data: players },
+    { data: rounds },
+    { data: songs },
+    { data: votes },
+    { data: groups },
+    { data: groupSongs },
+  ] = await Promise.all([
+    supabase.from('players').select('*').order('name'),
+    supabase.from('rounds').select('*').order('queue_position'),
+    supabase.from('songs').select('*, players(id, name, avatar_url, avatar_color)'),
+    supabase.from('votes').select('*'),
+    supabase.from('duplicate_groups').select('*'),
+    supabase.from('duplicate_group_songs').select('*'),
+  ])
+
+  return {
+    players: players || [],
+    rounds: rounds || [],
+    songs: songs || [],
+    votes: votes || [],
+    groups: groups || [],
+    groupSongs: groupSongs || [],
+  }
+}
 
 export default function PlayerListPage() {
-  const { player: currentPlayer } = usePlayer()
-  const [players, setPlayers] = useState([])
+  const { player, setPlayer } = usePlayer()
+  const { settings } = useSettings()
+  const [data, setData] = useState({ players: [], rounds: [], songs: [], votes: [], groups: [], groupSongs: [] })
   const [loading, setLoading] = useState(true)
-  const [toggling, setToggling] = useState({})
+  const [profile, setProfile] = useState({ name: player.name, avatar_url: player.avatar_url || '' })
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
 
-  async function loadPlayers() {
-    // Get all players
-    const { data: allPlayers } = await supabase
-      .from('players')
-      .select('*')
-      .order('name')
-
-    if (!allPlayers) { setLoading(false); return }
-
-    // Get all songs to count rounds submitted per player
-    const { data: allSongs } = await supabase
-      .from('songs')
-      .select('id, player_id, round_id')
-
-    // Get completed rounds to count how many rounds exist
-    const { data: completedRounds } = await supabase
-      .from('rounds')
-      .select('id')
-      .eq('status', 'complete')
-
-    // Get active round songs (to show who submitted this round)
-    const { data: activeRound } = await supabase
-      .from('rounds')
-      .select('id, theme_name, status')
-      .in('status', ['submission', 'voting'])
-      .limit(1)
-      .single()
-
-    // Get votes received per player (points earned)
-    const { data: allVotes } = await supabase
-      .from('votes')
-      .select('song_id, points, voter_player_id, round_id')
-
-    // Map song_id → player_id
-    const songOwnerMap = {}
-    for (const s of allSongs || []) {
-      songOwnerMap[s.id] = s.player_id
-    }
-
-    // Count rounds submitted and points earned per player
-    const roundsSubmitted = {}
-    const pointsEarned = {}
-    const activeRoundSubmitters = new Set()
-    const activeRoundVoters = new Set()
-
-    for (const s of allSongs || []) {
-      roundsSubmitted[s.player_id] = (roundsSubmitted[s.player_id] || 0) + 1
-      if (activeRound && s.round_id === activeRound.id) {
-        activeRoundSubmitters.add(s.player_id)
-      }
-    }
-
-    for (const v of allVotes || []) {
-      const owner = songOwnerMap[v.song_id]
-      if (owner) pointsEarned[owner] = (pointsEarned[owner] || 0) + v.points
-      if (activeRound && v.round_id === activeRound.id) {
-        activeRoundVoters.add(v.voter_player_id)
-      }
-    }
-
-    const enriched = allPlayers.map(p => ({
-      ...p,
-      rounds_submitted: roundsSubmitted[p.id] || 0,
-      points_earned: pointsEarned[p.id] || 0,
-      submitted_this_round: activeRoundSubmitters.has(p.id),
-      voted_this_round: activeRoundVoters.has(p.id),
-      completed_rounds: completedRounds?.length || 0,
-      active_round: activeRound || null,
-    }))
-
-    setPlayers(enriched)
+  async function load() {
+    const next = await fetchPlayersData()
+    setData(next)
     setLoading(false)
   }
 
   useEffect(() => {
-    loadPlayers()
+    load()
+    const channel = supabase
+      .channel('players-season-2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'songs' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_groups' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duplicate_group_songs' }, load)
+      .subscribe()
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  async function handleToggleActive(player) {
-    setToggling(t => ({ ...t, [player.id]: true }))
-    await supabase
+  useEffect(() => {
+    setProfile({ name: player.name, avatar_url: player.avatar_url || '' })
+  }, [player.id, player.name, player.avatar_url])
+
+  const scoredRoundIds = useMemo(() => getScoredRoundIds(data.rounds, settings), [data.rounds, settings])
+  const leaderboard = useMemo(() => buildLeaderboard({
+    players: data.players,
+    rounds: data.rounds,
+    songs: data.songs,
+    votes: data.votes,
+    duplicateGroups: data.groups,
+    groupSongs: data.groupSongs,
+    scoredRoundIds,
+  }), [data, scoredRoundIds])
+  const scoreMap = Object.fromEntries(leaderboard.map(row => [row.id, row.total]))
+  const submissionCounts = data.songs.reduce((counts, song) => {
+    counts[song.player_id] = (counts[song.player_id] || 0) + 1
+    return counts
+  }, {})
+
+  async function saveProfile(event) {
+    event.preventDefault()
+    const name = profile.name.trim()
+    if (!name) return
+
+    setSaving(true)
+    setMessage('')
+
+    const { data: updated, error } = await supabase
       .from('players')
-      .update({ active: !player.active })
+      .update({
+        name,
+        avatar_url: profile.avatar_url.trim() || null,
+      })
       .eq('id', player.id)
-    await loadPlayers()
-    setToggling(t => ({ ...t, [player.id]: false }))
+      .select()
+      .single()
+
+    setSaving(false)
+    if (error || !updated) {
+      setMessage('Could not save profile. The name may already be taken.')
+      return
+    }
+
+    setPlayer(updated)
+    setMessage('Profile saved.')
+    load()
   }
 
-  if (loading) return <div className="page"><p style={{ color: 'var(--text3)' }}>Loading players...</p></div>
+  async function toggleActive(row) {
+    await supabase.from('players').update({ active: !row.active }).eq('id', row.id)
+    load()
+  }
 
-  const active = players.filter(p => p.active)
-  const inactive = players.filter(p => !p.active)
+  if (loading) {
+    return (
+      <main className="page">
+        <p className="muted">Loading players...</p>
+      </main>
+    )
+  }
+
+  const active = data.players.filter(row => row.active)
+  const inactive = data.players.filter(row => !row.active)
 
   return (
-    <div className="page">
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h2>Player List</h2>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text3)', marginTop: '0.2rem' }}>
-          {active.length} active · {inactive.length} inactive · {players.length} total
-        </p>
-      </div>
+    <main className="page">
+      <section className="page-header">
+        <div>
+          <p className="eyebrow">Profiles</p>
+          <h1>Players</h1>
+          <p>{active.length} active · {inactive.length} inactive</p>
+        </div>
+      </section>
 
-      <div style={{
-        background: 'rgba(232, 124, 71, 0.08)',
-        border: '1px solid rgba(232, 124, 71, 0.3)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '0.85rem 1.1rem',
-        marginBottom: '1.5rem',
-      }}>
-        <p style={{ color: 'var(--accent2)', fontSize: '0.85rem', fontWeight: 600 }}>
-          ⚠️ Deactivating a player removes them from submission/voting counts and hides them from the join screen. Their historical data stays intact.
-        </p>
-      </div>
+      <section className="profile-editor card">
+        <div className="profile-preview">
+          <Avatar player={{ ...player, ...profile }} size="xl" />
+          <div>
+            <p className="eyebrow">My profile</p>
+            <h2>{profile.name || player.name}</h2>
+          </div>
+        </div>
+        <form className="stack" onSubmit={saveProfile}>
+          <div className="form-row">
+            <label>
+              <span>Name</span>
+              <input value={profile.name} onChange={event => setProfile(p => ({ ...p, name: event.target.value }))} />
+            </label>
+            <label>
+              <span>Profile image URL</span>
+              <input
+                type="url"
+                value={profile.avatar_url}
+                onChange={event => setProfile(p => ({ ...p, avatar_url: event.target.value }))}
+                placeholder="https://..."
+              />
+            </label>
+          </div>
+          {message && <p className={message.includes('Could not') ? 'error-msg' : 'success-msg'}>{message}</p>}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? 'Saving...' : 'Save profile'}
+          </button>
+        </form>
+      </section>
 
-      {/* Active players */}
-      <h3 style={{ marginBottom: '0.75rem', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text3)' }}>
-        Active Players
-      </h3>
+      <section className="warning-panel">
+        <strong>Open admin controls</strong>
+        <p>Anyone can deactivate or reactivate players. Historical songs, votes, and comments remain intact.</p>
+      </section>
 
-      {active.map(p => (
-        <PlayerRow
-          key={p.id}
-          player={p}
-          isCurrentUser={p.id === currentPlayer.id}
-          toggling={toggling[p.id]}
-          onToggle={handleToggleActive}
-        />
-      ))}
+      <PlayerSection
+        title="Active players"
+        players={active}
+        currentPlayerId={player.id}
+        scoreMap={scoreMap}
+        submissionCounts={submissionCounts}
+        onToggle={toggleActive}
+      />
 
-      {/* Inactive players */}
       {inactive.length > 0 && (
-        <>
-          <h3 style={{ margin: '1.5rem 0 0.75rem', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text3)' }}>
-            Inactive Players
-          </h3>
-          {inactive.map(p => (
-            <PlayerRow
-              key={p.id}
-              player={p}
-              isCurrentUser={p.id === currentPlayer.id}
-              toggling={toggling[p.id]}
-              onToggle={handleToggleActive}
-            />
-          ))}
-        </>
+        <PlayerSection
+          title="Inactive players"
+          players={inactive}
+          currentPlayerId={player.id}
+          scoreMap={scoreMap}
+          submissionCounts={submissionCounts}
+          onToggle={toggleActive}
+        />
       )}
-    </div>
+    </main>
   )
 }
 
-function PlayerRow({ player, isCurrentUser, toggling, onToggle }) {
+function PlayerSection({ title, players, currentPlayerId, scoreMap, submissionCounts, onToggle }) {
   return (
-    <div className="card" style={{
-      marginBottom: '0.6rem',
-      opacity: player.active ? 1 : 0.55,
-      borderColor: isCurrentUser ? 'rgba(232,197,71,0.3)' : undefined,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-
-        {/* Name + you tag */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1rem' }}>
-              {player.name}
-            </span>
-            {isCurrentUser && (
-              <span className="tag-own">you</span>
-            )}
-            {!player.active && (
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text3)', border: '1px solid var(--border)', padding: '0.1rem 0.4rem', borderRadius: '3px', fontFamily: 'var(--font-mono)' }}>
-                inactive
-              </span>
-            )}
-          </div>
-
-          {/* Stats row */}
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-              🎵 {player.rounds_submitted} round{player.rounds_submitted !== 1 ? 's' : ''} submitted
-            </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-              ⭐ {player.points_earned} pts earned
-            </span>
-            {player.active_round && (
-              <span style={{ fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: player.submitted_this_round ? 'var(--success)' : 'var(--accent2)' }}>
-                {player.submitted_this_round ? '✓ submitted this round' : '✗ not submitted yet'}
-              </span>
-            )}
-            {player.active_round?.status === 'voting' && (
-              <span style={{ fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: player.voted_this_round ? 'var(--success)' : 'var(--accent2)' }}>
-                {player.voted_this_round ? '✓ voted this round' : '✗ not voted yet'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Toggle button — can't deactivate yourself */}
-        {!isCurrentUser && (
-          <button
-            className={`btn btn-sm ${player.active ? 'btn-ghost' : 'btn-secondary'}`}
-            onClick={() => onToggle(player)}
-            disabled={toggling}
-            style={{ flexShrink: 0 }}
-          >
-            {toggling ? '...' : player.active ? 'Deactivate' : 'Reactivate'}
-          </button>
-        )}
+    <section className="round-section">
+      <div className="section-heading">
+        <h2>{title}</h2>
+        <span className="soft-tag">{players.length}</span>
       </div>
-    </div>
+      <div className="player-list">
+        {players.map(player => (
+          <article className={`player-row ${player.active ? '' : 'inactive'}`} key={player.id}>
+            <Avatar player={player} />
+            <div>
+              <h3>{player.name}{player.id === currentPlayerId ? ' (you)' : ''}</h3>
+              <p>{submissionCounts[player.id] || 0} submissions · {scoreMap[player.id] || 0} pts</p>
+            </div>
+            {player.id !== currentPlayerId && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onToggle(player)}>
+                {player.active ? 'Deactivate' : 'Reactivate'}
+              </button>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
   )
 }
