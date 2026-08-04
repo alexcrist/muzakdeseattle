@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import useDebouncedVotes from '../../hooks/useDebouncedVotes.js'
 import { anonymousNameFor } from '../../lib/anonymousNames.js'
 import { groupLabel } from '../../lib/groups.js'
@@ -7,12 +7,35 @@ import CommentThread, { RoundThread } from './CommentThread.jsx'
 import { generalComments, searchUrl, serviceLabelForUrl } from './homeUtils.js'
 import ListeningOrderPanel from './ListeningOrderPanel.jsx'
 
-export default function VotingView({ round, player, songs, votes, comments, activePlayers, pointsTotal, mySide, onChanged }) {
+export default function VotingView({
+  round,
+  player,
+  songs,
+  votes,
+  comments,
+  activePlayers,
+  pointsTotal,
+  mySide,
+  otherSide,
+  otherSideSongs = [],
+  otherSideComments = [],
+  onChanged,
+}) {
+  const [viewingOtherGroup, setViewingOtherGroup] = useState(false)
+  const canBrowseOtherGroup = otherSide !== null && otherSide !== undefined
+  const isViewingOther = canBrowseOtherGroup && viewingOtherGroup
+
   const orderedSongs = useMemo(() => (
     listeningOrderFor(songs, { roundId: round.id, playerId: player.id })
   ), [songs, round.id, player.id])
+  const otherOrderedSongs = useMemo(() => (
+    listeningOrderFor(otherSideSongs, { roundId: round.id, playerId: player.id })
+  ), [otherSideSongs, round.id, player.id])
   const anonymousLabelFor = playerId => anonymousNameFor(round.id, playerId)
   const myAnonymousName = anonymousLabelFor(player.id)
+
+  const activeSongs = isViewingOther ? otherOrderedSongs : orderedSongs
+  const activeComments = isViewingOther ? otherSideComments : comments
   const {
     adjustVote,
     draftVotes,
@@ -55,25 +78,56 @@ export default function VotingView({ round, player, songs, votes, comments, acti
       </aside>
 
       <section className="song-stack">
-        <RoundThread
-          comments={generalComments(comments)}
-          player={player}
-          revealAuthors={false}
-          anonymousLabelFor={anonymousLabelFor}
-          onChanged={onChanged}
-          roundId={round.id}
-        />
-        {songs.length === 0 ? (
+        {canBrowseOtherGroup && (
+          <div className="group-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isViewingOther}
+              className={`group-tab ${!isViewingOther ? 'is-active' : ''}`}
+              onClick={() => setViewingOtherGroup(false)}
+            >
+              My Group
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isViewingOther}
+              className={`group-tab ${isViewingOther ? 'is-active' : ''}`}
+              onClick={() => setViewingOtherGroup(true)}
+            >
+              Non-Voting Group
+            </button>
+          </div>
+        )}
+
+        {isViewingOther && (
+          <p className="muted group-tab-note">
+            Listen and comment here, but your voting points only count for My Group.
+          </p>
+        )}
+
+        {!isViewingOther && (
+          <RoundThread
+            comments={generalComments(comments)}
+            player={player}
+            revealAuthors={false}
+            anonymousLabelFor={anonymousLabelFor}
+            onChanged={onChanged}
+            roundId={round.id}
+          />
+        )}
+        {activeSongs.length === 0 ? (
           <div className="empty-state">
             <h2>No songs yet</h2>
-            <p>Voting is open, but nobody submitted a song.</p>
+            <p>{isViewingOther ? 'Nobody in the non-voting group submitted a song.' : 'Voting is open, but nobody submitted a song.'}</p>
           </div>
         ) : (
           <>
-            <ListeningOrderPanel items={orderedSongs} />
-            {orderedSongs.map((song, index) => {
-              const isOwn = song.player_id === player.id
-              const songComments = comments.filter(comment => comment.song_id === song.id)
+            <ListeningOrderPanel items={activeSongs} />
+            {activeSongs.map((song, index) => {
+              const isOwn = !isViewingOther && song.player_id === player.id
+              const songComments = activeComments.filter(comment => comment.song_id === song.id)
               const currentVote = draftVotes[song.id] || 0
               return (
                 <article className={`song-card ${isOwn ? 'is-own' : ''} ${currentVote > 0 ? 'has-votes' : ''}`} key={song.id}>
@@ -91,7 +145,9 @@ export default function VotingView({ round, player, songs, votes, comments, acti
                   </div>
 
                   <div className="vote-control">
-                    {isOwn ? (
+                    {isViewingOther ? (
+                      <span className="soft-tag">Not your vote</span>
+                    ) : isOwn ? (
                       <span className="soft-tag">Your song</span>
                     ) : (
                       <>

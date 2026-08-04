@@ -91,7 +91,7 @@ export default function HomePage() {
     const groupIds = new Set(roundGroups.map(group => group.id))
     const roundGroupSongs = data.groupSongs.filter(row => groupIds.has(row.group_id))
 
-    // During submission and voting a player only ever sees their own side. Song comments follow
+    // During submission and voting a player only ever votes on their own side. Song comments follow
     // their song; general round comments follow their author, so nothing leaks across the split.
     const onMySide = playerId => !sides.isSplit || sides.sideByPlayerId[playerId] === mySide
     const mySideSongs = roundSongs.filter(song => onMySide(song.player_id))
@@ -101,6 +101,17 @@ export default function HomePage() {
       comment.song_id ? mySideSongIds.has(comment.song_id) : onMySide(comment.player_id)
     ))
     const mySidePlayers = activePlayers.filter(row => onMySide(row.id))
+
+    // Voting is still scoped to your own side, but players can browse and comment on the
+    // non-voting group's songs during voting. No votes/scores are exposed for that side.
+    const otherSide = sides.isSplit && mySide !== null ? 1 - mySide : null
+    const otherSideSongs = otherSide === null
+      ? []
+      : roundSongs.filter(song => sides.sideByPlayerId[song.player_id] === otherSide)
+    const otherSideSongIds = new Set(otherSideSongs.map(song => song.id))
+    const otherSideComments = otherSide === null
+      ? []
+      : roundComments.filter(comment => comment.song_id && otherSideSongIds.has(comment.song_id))
 
     return {
       roundSongs,
@@ -112,6 +123,9 @@ export default function HomePage() {
       mySideVotes,
       mySideComments,
       mySidePlayers,
+      otherSide,
+      otherSideSongs,
+      otherSideComments,
     }
   }, [currentRound, data, sides, mySide, activePlayers])
 
@@ -197,6 +211,9 @@ export default function HomePage() {
               activePlayers={roundData.mySidePlayers}
               pointsTotal={settings?.points_per_player || 10}
               mySide={mySide}
+              otherSide={roundData.otherSide}
+              otherSideSongs={roundData.otherSideSongs}
+              otherSideComments={roundData.otherSideComments}
               onChanged={reload}
             />
           )}

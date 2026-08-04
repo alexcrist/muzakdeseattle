@@ -1936,6 +1936,35 @@ select:focus {
   margin-bottom: 0.9rem;
 }
 
+.group-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.group-tab {
+  flex: 1;
+  padding: 0.55rem 0.9rem;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.group-tab.is-active {
+  background: var(--pink-soft);
+  border-color: var(--pink);
+}
+
+.group-tab-note {
+  margin-bottom: 0.9rem;
+}
+
 .roster-dot.is-you {
   color: var(--ink);
 }
