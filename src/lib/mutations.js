@@ -82,6 +82,39 @@ export async function addRound({ form, playerId, context }) {
   return { error }
 }
 
+export async function updateRoundTheme({ roundId, theme_name, theme_description }) {
+  const { error } = await supabase
+    .from('rounds')
+    .update({
+      theme_name: theme_name.trim(),
+      theme_description: theme_description.trim(),
+    })
+    .eq('id', roundId)
+
+  return { error }
+}
+
+export async function deleteRound({ round, orderedRounds, scheduleStartDate }) {
+  const { error } = await supabase.from('rounds').delete().eq('id', round.id)
+  if (error) return { error }
+
+  // Only rounds scheduled after the deleted one shift back a week to close the gap it leaves;
+  // earlier rounds (already played) keep whatever dates they already have.
+  const laterRounds = orderedRounds.filter(item => item.id !== round.id && item.queue_position > round.queue_position)
+  await Promise.all(laterRounds.map(item => {
+    const queuePosition = item.queue_position - 1
+    return supabase
+      .from('rounds')
+      .update({
+        queue_position: queuePosition,
+        week_start_date: addDays(scheduleStartDate, queuePosition * 7),
+      })
+      .eq('id', item.id)
+  }))
+
+  return { error: null }
+}
+
 export async function moveUpcomingRound({ round, direction, upcomingRows, scheduleStartDate }) {
   const future = upcomingRows.map(row => row.round)
   const currentIndex = future.findIndex(item => item.id === round.id)

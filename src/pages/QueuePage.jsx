@@ -4,7 +4,7 @@ import Avatar from '../components/Avatar.jsx'
 import useRealtimeData from '../hooks/useRealtimeData.js'
 import { EMPTY_ROUNDS_DATA, fetchRoundsData, ROUNDS_REALTIME_TABLES } from '../lib/data.js'
 import { groupLabel, sidesForRound } from '../lib/groups.js'
-import { addRound, moveUpcomingRound } from '../lib/mutations.js'
+import { addRound, deleteRound, moveUpcomingRound, updateRoundTheme } from '../lib/mutations.js'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
 import { formatPacificDate, getLeagueContext, getRoundState, getRoundTiming, PHASES } from '../lib/schedule.js'
 
@@ -21,6 +21,10 @@ export default function RoundsPage() {
   const [form, setForm] = useState({ theme_name: '', theme_description: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({ theme_name: '', theme_description: '' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
 
   const context = useMemo(() => getLeagueContext(data.rounds, settings), [data.rounds, settings])
   const roundRows = context.orderedRounds.map((round, index) => ({
@@ -66,6 +70,50 @@ export default function RoundsPage() {
       upcomingRows: upcoming,
       scheduleStartDate: context.startDate,
     })
+    reload()
+  }
+
+  function startEdit(round) {
+    setEditingId(round.id)
+    setEditForm({ theme_name: round.theme_name, theme_description: round.theme_description })
+    setEditError('')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditError('')
+  }
+
+  async function saveEdit(round) {
+    if (!editForm.theme_name.trim() || !editForm.theme_description.trim()) {
+      setEditError('Theme and description are required.')
+      return
+    }
+
+    setEditSaving(true)
+    const { error: updateError } = await updateRoundTheme({ roundId: round.id, ...editForm })
+    setEditSaving(false)
+    if (updateError) {
+      setEditError('Could not save changes.')
+      return
+    }
+
+    setEditingId(null)
+    reload()
+  }
+
+  async function removeRound(round) {
+    const confirmed = window.confirm(
+      `Delete "${round.theme_name}"? This permanently removes its songs, votes, and comments.`
+    )
+    if (!confirmed) return
+
+    await deleteRound({
+      round,
+      orderedRounds: context.orderedRounds,
+      scheduleStartDate: context.startDate,
+    })
+    if (editingId === round.id) setEditingId(null)
     reload()
   }
 
@@ -122,7 +170,27 @@ export default function RoundsPage() {
 
       <RoundSection title="Now playing" rows={current}>
         {current.map(row => (
-          <RoundCard key={row.round.id} row={row} settings={settings} currentPhase={context.phase} />
+          <RoundCard
+            key={row.round.id}
+            row={row}
+            settings={settings}
+            currentPhase={context.phase}
+            controls={
+              <div className="round-controls">
+                <button type="button" className="icon-btn" onClick={() => startEdit(row.round)} aria-label="Edit round">✎</button>
+                <button type="button" className="icon-btn" onClick={() => removeRound(row.round)} aria-label="Delete round">✕</button>
+              </div>
+            }
+            manage={{
+              editing: editingId === row.round.id,
+              editForm,
+              onFieldChange: (field, value) => setEditForm(f => ({ ...f, [field]: value })),
+              onSave: () => saveEdit(row.round),
+              onCancel: cancelEdit,
+              saving: editSaving,
+              error: editingId === row.round.id ? editError : '',
+            }}
+          />
         ))}
       </RoundSection>
 
@@ -136,8 +204,19 @@ export default function RoundsPage() {
               <div className="round-controls">
                 <button type="button" className="icon-btn" onClick={() => moveRound(row.round, -1)} disabled={index === 0}>↑</button>
                 <button type="button" className="icon-btn" onClick={() => moveRound(row.round, 1)} disabled={index === upcoming.length - 1}>↓</button>
+                <button type="button" className="icon-btn" onClick={() => startEdit(row.round)} aria-label="Edit round">✎</button>
+                <button type="button" className="icon-btn" onClick={() => removeRound(row.round)} aria-label="Delete round">✕</button>
               </div>
             }
+            manage={{
+              editing: editingId === row.round.id,
+              editForm,
+              onFieldChange: (field, value) => setEditForm(f => ({ ...f, [field]: value })),
+              onSave: () => saveEdit(row.round),
+              onCancel: cancelEdit,
+              saving: editSaving,
+              error: editingId === row.round.id ? editError : '',
+            }}
           />
         ))}
       </RoundSection>
@@ -175,7 +254,7 @@ function RoundSection({ title, rows, children }) {
   )
 }
 
-function RoundCard({ row, currentPhase, controls }) {
+function RoundCard({ row, currentPhase, controls, manage }) {
   const { round, state, timing } = row
   const phaseLabel = state === 'current'
     ? PHASES[currentPhase]?.label || 'Current'
@@ -192,8 +271,40 @@ function RoundCard({ row, currentPhase, controls }) {
       </div>
       <div className="round-card-main">
         <span className={`phase-pill phase-${state === 'current' ? currentPhase : state === 'upcoming' ? 'off' : 'appreciation'}`}>{phaseLabel}</span>
-        <h3>{round.theme_name}</h3>
-        <p>{round.theme_description}</p>
+        {manage?.editing ? (
+          <form className="stack edit-round-form" onSubmit={event => { event.preventDefault(); manage.onSave() }}>
+            <label>
+              <span>Theme</span>
+              <input
+                value={manage.editForm.theme_name}
+                onChange={event => manage.onFieldChange('theme_name', event.target.value)}
+                autoFocus
+              />
+            </label>
+            <label>
+              <span>Description</span>
+              <textarea
+                value={manage.editForm.theme_description}
+                onChange={event => manage.onFieldChange('theme_description', event.target.value)}
+                rows={3}
+              />
+            </label>
+            {manage.error && <p className="error-msg">{manage.error}</p>}
+            <div className="round-controls">
+              <button type="submit" className="btn btn-primary btn-sm" disabled={manage.saving}>
+                {manage.saving ? 'Saving...' : 'Save'}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={manage.onCancel} disabled={manage.saving}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <h3>{round.theme_name}</h3>
+            <p>{round.theme_description}</p>
+          </>
+        )}
         <div className="round-meta">
           <span>Week of {formatPacificDate(timing.weekStart)}</span>
           {round.players && (
@@ -204,7 +315,7 @@ function RoundCard({ row, currentPhase, controls }) {
           )}
         </div>
       </div>
-      {controls}
+      {!manage?.editing && controls}
     </article>
   )
 }
