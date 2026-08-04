@@ -8,7 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "db:link": "supabase link",
-    "db:push": "supabase db push"
+    "db:push": "supabase db push",
+    "db:status": "node scripts/migrate.mjs --status",
+    "db:plan": "node scripts/migrate.mjs --dry-run",
+    "db:deploy": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

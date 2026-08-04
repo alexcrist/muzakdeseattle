@@ -5,26 +5,38 @@ Season 2 should use a fresh Supabase project. Keep the old Supabase project onli
 ## 1. Create The Season 2 Supabase Project
 
 1. Go to Supabase and create a new project.
-2. Log in to the Supabase CLI once:
-
-```bash
-npx supabase login
-```
-
-3. Link the local repo to the new project and apply migrations:
-
-```bash
-npm run db:link -- --project-ref your-project-ref
-npm run db:push
-```
+2. Put its URL and anon key in `.env.local` (see step 2 below) — the migration script reads the project ref from there.
+3. Apply the migrations with `npm run db:deploy`, described under [Applying Migrations](#applying-migrations).
 
 The schema source of truth is `supabase/migrations/`. The initial migration creates the Season 2 tables, storage bucket, realtime publication, and public RLS policies. Later migrations keep general round comments, duplicate merging, and round side splitting in sync.
 
 Apply migrations before deploying app code that depends on them. Until `round_groups` exists the app reads an empty side list and runs every round as a single pool, so an un-migrated database degrades rather than breaking.
 
-If an existing Season 2 database was created manually from an older setup doc, `npm run db:push` can still be used; the baseline migration is written to be idempotent for already-created tables, triggers, policies, storage, and realtime setup.
+The Supabase CLI is the alternative path: `npx supabase login`, then `npm run db:link -- --project-ref your-project-ref` and `npm run db:push`. It needs the database password as well as a token, which is why `db:deploy` exists.
+
+If an existing Season 2 database was created manually from an older setup doc, either path still works; the baseline migration is written to be idempotent for already-created tables, triggers, policies, storage, and realtime setup.
 
 Do not commit database passwords or Supabase access tokens.
+
+## Applying Migrations
+
+Migrations run through the Supabase Management API, which needs only a personal access token. No database password, no connection string, no pooler configuration.
+
+Create a token at <https://supabase.com/dashboard/account/tokens> (it starts with `sbp_`) and save it to `~/.muzak-supabase-token`, or export it as `SUPABASE_ACCESS_TOKEN`. Then:
+
+```bash
+npm run db:status   # applied vs pending
+npm run db:plan     # dry run, changes nothing
+npm run db:deploy   # apply pending migrations
+```
+
+`scripts/migrate.mjs` applies each pending file in filename order and records it in `supabase_migrations.schema_migrations`, the same table the Supabase CLI uses, so `supabase db push` remains interchangeable with this script. A migration that fails stops the run and is not recorded, so re-running retries it.
+
+The script targets whichever project `VITE_SUPABASE_URL` (or `NEXT_PUBLIC_SUPABASE_URL`) in `.env.local` points at — it parses the ref out of that URL rather than taking a flag. Check that file before deploying against an unfamiliar checkout.
+
+Note that API keys — `anon`, `service_role`, `sb_publishable_`, `sb_secret_` — **cannot** run migrations. They authenticate to PostgREST, which exposes no DDL. Only a `sbp_` personal access token works here.
+
+Migrations should stay idempotent (`create table if not exists`, `create or replace function`, `drop policy if exists`) so that re-applying the full set against an already-provisioned database is harmless.
 
 ## 2. Add Supabase Credentials
 
@@ -51,12 +63,16 @@ The app still accepts `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLI
 
 ## 3. Build And Deploy
 
+Netlify builds from this repo, so pushing to `main` deploys. There is no manual upload step.
+
+Build locally first to catch a broken build before it reaches the site:
+
 ```bash
 npm install
 npm run build
 ```
 
-Deploy `dist/` to the existing Netlify site, or let Netlify build from the repo if it is connected.
+Netlify reads its build settings from `netlify.toml`. Environment variables set in the Netlify UI are baked in at build time, so changing one requires a redeploy to take effect.
 
 ## 4. Connect `muzakdeseattle.com`
 
@@ -85,6 +101,8 @@ Useful docs:
 2. Create or pick your profile.
 3. Go to **Admin** and confirm the league name, points per player, schedule start Monday, and weekly phase calendar.
 4. Go to **Rounds** and add the first prompt.
+
+Keep a few rounds queued ahead of the current week. Each round is dated by its position in the queue, so one added after the queue has run dry is dated to a week that already passed and goes straight to history rather than becoming the current round.
 
 Default schedule:
 

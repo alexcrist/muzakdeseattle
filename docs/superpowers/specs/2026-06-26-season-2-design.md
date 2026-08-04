@@ -1,5 +1,7 @@
 # Muzak Season 2 Design
 
+> **Status: historical.** This is the original Season 2 design, written 2026-06-26 and kept as a record of the intent behind the rebuild. It predates round sides, and it describes a Leaderboard section that shipped as standings inside Players. For current behavior, read `CLAUDE.md`.
+
 ## Goal
 
 Rebuild Muzak in place as Season 2 while preserving Season 1 data in its existing Supabase project. Season 2 uses the current Netlify app deployment model, but points at a fresh Supabase database with a clean schema.
