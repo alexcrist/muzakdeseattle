@@ -176,6 +176,24 @@ export async function clearProfilePictureUrl(playerId) {
   return { data, error }
 }
 
+export async function assignRoundGroups({ roundId, assignments }) {
+  const { data, error } = await supabase.rpc('assign_round_groups', {
+    p_round_id: roundId,
+    p_assignments: assignments,
+  })
+
+  return { inserted: data ?? 0, error }
+}
+
+export async function joinRoundGroup({ roundId, playerId }) {
+  const { data, error } = await supabase.rpc('join_round_group', {
+    p_round_id: roundId,
+    p_player_id: playerId,
+  })
+
+  return { groupIndex: data ?? -1, error }
+}
+
 export async function createDuplicateMerge({ roundId, songIds, canonicalSongId }) {
   const { error } = await supabase.rpc('create_duplicate_merge', {
     p_round_id: roundId,

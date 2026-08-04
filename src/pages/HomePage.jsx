@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Countdown from '../components/Countdown.jsx'
 import { usePlayer, useSettings } from '../App.jsx'
 import useRealtimeData from '../hooks/useRealtimeData.js'
 import { EMPTY_HOME_DATA, fetchHomeData, HOME_REALTIME_TABLES } from '../lib/data.js'
+import { buildRoundGroupAssignment, shouldSplitRound, sideOf, sidesForRound } from '../lib/groups.js'
+import { assignRoundGroups, joinRoundGroup } from '../lib/mutations.js'
 import { formatPacificDate, getLeagueContext, getRoundTiming, PHASES } from '../lib/schedule.js'
 import AppreciationView from './home/AppreciationView.jsx'
 import { phaseHint, phaseTitle } from './home/homeUtils.js'
@@ -31,18 +33,87 @@ export default function HomePage() {
 
   const context = useMemo(() => getLeagueContext(data.rounds, settings, now), [data.rounds, settings, now])
   const currentRound = context.currentRound
-  const activePlayers = data.players.filter(p => p.active)
+  const activePlayers = useMemo(() => data.players.filter(p => p.active), [data.players])
+
+  const sides = useMemo(
+    () => sidesForRound(data.roundGroups, currentRound?.id),
+    [data.roundGroups, currentRound?.id]
+  )
+  const mySide = sideOf(sides, player.id)
+
+  // The sides for a round are written once, by whoever opens the app first after it goes live.
+  // The RPC is first-writer-wins, so a race between two clients cannot produce two splits.
+  const settledRoundsRef = useRef(new Set())
+  useEffect(() => {
+    if (loading || !currentRound) return
+
+    const roundId = currentRound.id
+    const needsAssignment = !sides.isSplit && shouldSplitRound(activePlayers.length)
+    const needsJoin = sides.isSplit && mySide === null
+    if (!needsAssignment && !needsJoin) return
+
+    const attemptKey = `${roundId}:${needsAssignment ? 'assign' : 'join'}:${activePlayers.length}`
+    if (settledRoundsRef.current.has(attemptKey)) return
+    settledRoundsRef.current.add(attemptKey)
+
+    let cancelled = false
+
+    async function settleSides() {
+      if (needsAssignment) {
+        const assignments = buildRoundGroupAssignment({
+          roundId,
+          activePlayers,
+          priorGroupRows: data.roundGroups.filter(row => row.round_id !== roundId),
+        })
+        if (!assignments) return
+        await assignRoundGroups({ roundId, assignments })
+      } else {
+        await joinRoundGroup({ roundId, playerId: player.id })
+      }
+
+      if (!cancelled) reload()
+    }
+
+    settleSides()
+
+    return () => {
+      cancelled = true
+    }
+  }, [loading, currentRound, sides.isSplit, mySide, activePlayers, data.roundGroups, player.id, reload])
 
   const roundData = useMemo(() => {
     if (!currentRound) return null
+
     const roundSongs = data.songs.filter(song => song.round_id === currentRound.id)
     const roundVotes = data.votes.filter(vote => vote.round_id === currentRound.id)
     const roundComments = data.comments.filter(comment => comment.round_id === currentRound.id)
     const roundGroups = data.duplicateGroups.filter(group => group.round_id === currentRound.id)
     const groupIds = new Set(roundGroups.map(group => group.id))
     const roundGroupSongs = data.groupSongs.filter(row => groupIds.has(row.group_id))
-    return { roundSongs, roundVotes, roundComments, roundGroups, roundGroupSongs }
-  }, [currentRound, data])
+
+    // During submission and voting a player only ever sees their own side. Song comments follow
+    // their song; general round comments follow their author, so nothing leaks across the split.
+    const onMySide = playerId => !sides.isSplit || sides.sideByPlayerId[playerId] === mySide
+    const mySideSongs = roundSongs.filter(song => onMySide(song.player_id))
+    const mySideSongIds = new Set(mySideSongs.map(song => song.id))
+    const mySideVotes = roundVotes.filter(vote => mySideSongIds.has(vote.song_id))
+    const mySideComments = roundComments.filter(comment => (
+      comment.song_id ? mySideSongIds.has(comment.song_id) : onMySide(comment.player_id)
+    ))
+    const mySidePlayers = activePlayers.filter(row => onMySide(row.id))
+
+    return {
+      roundSongs,
+      roundVotes,
+      roundComments,
+      roundGroups,
+      roundGroupSongs,
+      mySideSongs,
+      mySideVotes,
+      mySideComments,
+      mySidePlayers,
+    }
+  }, [currentRound, data, sides, mySide, activePlayers])
 
   if (loading) {
     return (
@@ -71,6 +142,7 @@ export default function HomePage() {
 
   const timing = getRoundTiming(currentRound, context.currentRoundIndex, settings, now)
   const nextPhaseLabel = PHASES[context.nextPhase]?.label || 'next phase'
+  const awaitingSides = sides.isSplit && mySide === null
 
   return (
     <main className="page">
@@ -96,47 +168,60 @@ export default function HomePage() {
         <Countdown target={context.nextPhaseAt} label={`Next: ${nextPhaseLabel}`} />
       </section>
 
-      {context.phase === 'submission' && (
-        <SubmissionView
-          round={currentRound}
-          player={player}
-          songs={roundData.roundSongs}
-          activePlayers={activePlayers}
-          onChanged={reload}
-        />
-      )}
-
-      {context.phase === 'voting' && (
-        <VotingView
-          round={currentRound}
-          player={player}
-          songs={roundData.roundSongs}
-          votes={roundData.roundVotes}
-          comments={roundData.roundComments}
-          activePlayers={activePlayers}
-          pointsTotal={settings?.points_per_player || 10}
-          onChanged={reload}
-        />
-      )}
-
-      {context.phase === 'appreciation' && (
-        <AppreciationView
-          round={currentRound}
-          player={player}
-          songs={roundData.roundSongs}
-          votes={roundData.roundVotes}
-          comments={roundData.roundComments}
-          duplicateGroups={roundData.roundGroups}
-          groupSongs={roundData.roundGroupSongs}
-          onChanged={reload}
-        />
-      )}
-
-      {context.phase === 'off' && (
+      {awaitingSides && context.phase !== 'appreciation' ? (
         <section className="empty-state">
-          <h2>Off day</h2>
-          <p>This round is waiting for the next scheduled phase.</p>
+          <h2>Finding you a side</h2>
+          <p>This round is already split. Hang tight while you get slotted in.</p>
         </section>
+      ) : (
+        <>
+          {context.phase === 'submission' && (
+            <SubmissionView
+              round={currentRound}
+              player={player}
+              songs={roundData.roundSongs}
+              activePlayers={activePlayers}
+              sides={sides}
+              mySide={mySide}
+              onChanged={reload}
+            />
+          )}
+
+          {context.phase === 'voting' && (
+            <VotingView
+              round={currentRound}
+              player={player}
+              songs={roundData.mySideSongs}
+              votes={roundData.mySideVotes}
+              comments={roundData.mySideComments}
+              activePlayers={roundData.mySidePlayers}
+              pointsTotal={settings?.points_per_player || 10}
+              mySide={mySide}
+              onChanged={reload}
+            />
+          )}
+
+          {context.phase === 'appreciation' && (
+            <AppreciationView
+              round={currentRound}
+              player={player}
+              songs={roundData.roundSongs}
+              votes={roundData.roundVotes}
+              comments={roundData.roundComments}
+              duplicateGroups={roundData.roundGroups}
+              groupSongs={roundData.roundGroupSongs}
+              sides={sides}
+              onChanged={reload}
+            />
+          )}
+
+          {context.phase === 'off' && (
+            <section className="empty-state">
+              <h2>Off day</h2>
+              <p>This round is waiting for the next scheduled phase.</p>
+            </section>
+          )}
+        </>
       )}
     </main>
   )

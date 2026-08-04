@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import Avatar from '../../components/Avatar.jsx'
+import SideRoster from '../../components/SideRoster.jsx'
+import { groupLabel } from '../../lib/groups.js'
 import { saveSongSubmission } from '../../lib/mutations.js'
 
-export default function SubmissionView({ round, player, songs, activePlayers, onChanged }) {
+export default function SubmissionView({ round, player, songs, activePlayers, sides, mySide, onChanged }) {
   const mySong = songs.find(song => song.player_id === player.id)
   const [form, setForm] = useState({
     artist: mySong?.artist || '',
@@ -49,21 +50,34 @@ export default function SubmissionView({ round, player, songs, activePlayers, on
   }
 
   const submittedIds = new Set(songs.map(song => song.player_id))
-  const submittedCount = songs.length
+  const isSplit = sides?.isSplit && mySide !== null
+  const otherSide = mySide === 0 ? 1 : 0
+  const mySidePlayers = isSplit ? activePlayers.filter(row => sides.sideByPlayerId[row.id] === mySide) : activePlayers
+  const otherSidePlayers = isSplit ? activePlayers.filter(row => sides.sideByPlayerId[row.id] === otherSide) : []
+  const mySubmittedCount = mySidePlayers.filter(row => submittedIds.has(row.id)).length
 
   return (
     <section className="phase-layout">
       <aside className="side-panel">
-        <h2>Submission roll call</h2>
-        <p className="big-stat">{submittedCount}/{activePlayers.length}</p>
-        <div className="mini-roster">
-          {activePlayers.map(activePlayer => (
-            <span key={activePlayer.id} className={`roster-dot ${submittedIds.has(activePlayer.id) ? 'done' : ''}`}>
-              <Avatar player={activePlayer} size="sm" />
-              <span>{activePlayer.name}</span>
-            </span>
-          ))}
-        </div>
+        {isSplit ? (
+          <>
+            <p className="eyebrow">Your side this week</p>
+            <h2 className={`side-name side-${mySide}`}>{groupLabel(mySide)}</h2>
+            <p className="big-stat">{mySubmittedCount}/{mySidePlayers.length}</p>
+            <p>You will hear and vote on these players only.</p>
+            <SideRoster players={mySidePlayers} submittedIds={submittedIds} currentPlayerId={player.id} />
+            <hr />
+            <p className="eyebrow">Also playing this week</p>
+            <h3 className={`side-name side-${otherSide}`}>{groupLabel(otherSide)}</h3>
+            <SideRoster players={otherSidePlayers} submittedIds={submittedIds} currentPlayerId={player.id} muted />
+          </>
+        ) : (
+          <>
+            <h2>Submission roll call</h2>
+            <p className="big-stat">{songs.length}/{activePlayers.length}</p>
+            <SideRoster players={activePlayers} submittedIds={submittedIds} currentPlayerId={player.id} />
+          </>
+        )}
       </aside>
 
       <section className="card">
@@ -71,6 +85,13 @@ export default function SubmissionView({ round, player, songs, activePlayers, on
           <h2>{mySong ? 'Your submission' : 'Lock in a song'}</h2>
           {mySong && <span className="soft-tag">Editable</span>}
         </div>
+
+        {isSplit && (
+          <p className="muted side-note">
+            Only {groupLabel(mySide)} hears this one. The other {otherSidePlayers.length} players run their own side of
+            the same theme, and both sides are ranked together on Sunday.
+          </p>
+        )}
 
         <form className="stack" onSubmit={handleSubmit}>
           <div className="form-row">

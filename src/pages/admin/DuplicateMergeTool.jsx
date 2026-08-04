@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Avatar from '../../components/Avatar.jsx'
+import { groupLabel, sidesForRound } from '../../lib/groups.js'
 import { createDuplicateMerge, deleteDuplicateMerge } from '../../lib/mutations.js'
 import { buildSongEntries, entrySubmitterText } from '../../lib/scoring.js'
 import { getLeagueContext, getRoundState } from '../../lib/schedule.js'
@@ -31,7 +32,25 @@ export default function DuplicateMergeTool({ settings, data, onChanged }) {
   const groupIds = new Set(roundGroups.map(group => group.id))
   const roundGroupSongs = data.groupSongs.filter(row => groupIds.has(row.group_id))
   const groupedSongIds = new Set(roundGroupSongs.map(row => row.song_id))
-  const entries = buildSongEntries({ songs: roundSongs, votes: roundVotes, duplicateGroups: roundGroups, groupSongs: roundGroupSongs })
+  const sides = sidesForRound(data.roundGroups, selectedRoundId)
+  const entries = buildSongEntries({
+    songs: roundSongs,
+    votes: roundVotes,
+    duplicateGroups: roundGroups,
+    groupSongs: roundGroupSongs,
+    sideByPlayerId: sides.isSplit ? sides.sideByPlayerId : null,
+  })
+
+  // Opposite sides never shared a voting pool, so there is no split vote for courtesy points to
+  // repair. The RPC rejects a cross-side merge too; this just keeps it un-clickable.
+  const sideOfSong = song => {
+    if (!sides.isSplit) return null
+    const side = sides.sideByPlayerId[song?.player_id]
+    return side === 0 || side === 1 ? side : null
+  }
+  const lockedSide = selectedSongIds.length > 0
+    ? sideOfSong(roundSongs.find(song => song.id === selectedSongIds[0]))
+    : null
 
   function toggleSong(songId) {
     setSelectedSongIds(ids => {
@@ -119,8 +138,10 @@ export default function DuplicateMergeTool({ settings, data, onChanged }) {
               <h3>Songs</h3>
               <div className="merge-song-list">
                 {roundSongs.map(song => {
-                  const disabled = groupedSongIds.has(song.id)
+                  const songSide = sideOfSong(song)
                   const selected = selectedSongIds.includes(song.id)
+                  const wrongSide = !selected && lockedSide !== null && songSide !== lockedSide
+                  const disabled = groupedSongIds.has(song.id) || wrongSide
                   return (
                     <button
                       type="button"
@@ -131,9 +152,16 @@ export default function DuplicateMergeTool({ settings, data, onChanged }) {
                     >
                       <span>
                         <strong>{song.title}</strong>
-                        <small>{song.artist} · {song.players?.name || 'Unknown player'}</small>
+                        <small>
+                          {song.artist} · {song.players?.name || 'Unknown player'}
+                          {songSide === 0 || songSide === 1 ? ` · ${groupLabel(songSide)}` : ''}
+                        </small>
                       </span>
-                      {disabled ? <em>Already merged</em> : selected ? <em>Selected</em> : null}
+                      {groupedSongIds.has(song.id)
+                        ? <em>Already merged</em>
+                        : wrongSide
+                          ? <em>Other side</em>
+                          : selected ? <em>Selected</em> : null}
                     </button>
                   )
                 })}

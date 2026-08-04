@@ -4,6 +4,7 @@ import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
 import useRealtimeData from '../hooks/useRealtimeData.js'
 import { EMPTY_PLAYER_DATA, fetchPlayerData, PLAYER_REALTIME_TABLES } from '../lib/data.js'
+import { groupLabel, sidesForRound } from '../lib/groups.js'
 import { clearProfilePictureUrl, saveProfileName, saveProfilePictureUrl } from '../lib/mutations.js'
 import { uploadProfilePicture } from '../lib/profilePictures.js'
 import { buildLeaderboard, buildSongEntries } from '../lib/scoring.js'
@@ -56,15 +57,24 @@ export default function PlayerPage() {
         const roundGroups = data.groups.filter(group => group.round_id === round.id)
         const groupIds = new Set(roundGroups.map(group => group.id))
         const roundGroupSongs = data.groupSongs.filter(row => groupIds.has(row.group_id))
+        const sides = sidesForRound(data.roundGroups, round.id)
         const entries = buildSongEntries({
           songs: roundSongs,
           votes: roundVotes,
           duplicateGroups: roundGroups,
           groupSongs: roundGroupSongs,
+          sideByPlayerId: sides.isSplit ? sides.sideByPlayerId : null,
         })
 
+        // A player only ever competed against their own side, so rank within that side.
+        const placeBySide = {}
+
         return entries
-          .map((entry, index) => ({ entry, rank: index + 1 }))
+          .map(entry => {
+            const key = entry.side === 0 || entry.side === 1 ? entry.side : 'all'
+            placeBySide[key] = (placeBySide[key] || 0) + 1
+            return { entry, rank: placeBySide[key] }
+          })
           .filter(({ entry }) => entry.submitterIds?.includes(viewedPlayer.id))
           .map(({ entry, rank }) => {
             const submittedSong = entry.songs?.find(song => song.player_id === viewedPlayer.id) || entry.songs?.[0]
@@ -311,6 +321,9 @@ function PlayerSubmission({ submission }) {
             <p className="eyebrow">Week of {formatPacificDate(weekStart)}</p>
             <div className="section-heading compact">
               <h2>{song?.title || entry.title}</h2>
+              {entry.side !== null && entry.side !== undefined && (
+                <span className={`side-tag side-${entry.side}`}>{groupLabel(entry.side)}</span>
+              )}
               {entry.isDuplicate && <span className="soft-tag">Merged duplicate</span>}
             </div>
             <p>{song?.artist || entry.artist}{song?.album ? ` · ${song.album}` : ''}</p>

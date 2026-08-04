@@ -27,7 +27,16 @@ export function groupMembership(groupSongs = []) {
   return { songToGroup, groupToSongs }
 }
 
-export function buildSongEntries({ songs = [], votes = [], duplicateGroups = [], groupSongs = [] }) {
+function sideForPlayers(sideByPlayerId, playerIds = []) {
+  if (!sideByPlayerId) return null
+  for (const playerId of playerIds) {
+    const side = sideByPlayerId[playerId]
+    if (side === 0 || side === 1) return side
+  }
+  return null
+}
+
+export function buildSongEntries({ songs = [], votes = [], duplicateGroups = [], groupSongs = [], sideByPlayerId = null }) {
   const songMap = Object.fromEntries((songs || []).map(song => [song.id, song]))
   const groupMap = Object.fromEntries((duplicateGroups || []).map(group => [group.id, group]))
   const { songToGroup, groupToSongs } = groupMembership(groupSongs)
@@ -66,6 +75,7 @@ export function buildSongEntries({ songs = [], votes = [], duplicateGroups = [],
       songs: memberSongs,
       submitters,
       submitterIds: [...submitterIds],
+      side: sideForPlayers(sideByPlayerId, [...submitterIds]),
       votePoints,
       courtesyPoints,
       totalPoints,
@@ -97,6 +107,7 @@ export function buildSongEntries({ songs = [], votes = [], duplicateGroups = [],
       songs: [song],
       submitters: song.players ? [song.players] : [],
       submitterIds: [song.player_id],
+      side: sideForPlayers(sideByPlayerId, [song.player_id]),
       votePoints,
       courtesyPoints: 0,
       totalPoints: votePoints,

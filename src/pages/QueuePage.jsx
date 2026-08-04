@@ -3,6 +3,7 @@ import { usePlayer, useSettings } from '../App.jsx'
 import Avatar from '../components/Avatar.jsx'
 import useRealtimeData from '../hooks/useRealtimeData.js'
 import { EMPTY_ROUNDS_DATA, fetchRoundsData, ROUNDS_REALTIME_TABLES } from '../lib/data.js'
+import { groupLabel, sidesForRound } from '../lib/groups.js'
 import { addRound, moveUpcomingRound } from '../lib/mutations.js'
 import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
 import { formatPacificDate, getLeagueContext, getRoundState, getRoundTiming, PHASES } from '../lib/schedule.js'
@@ -150,6 +151,7 @@ export default function RoundsPage() {
             votes={data.votes.filter(vote => vote.round_id === row.round.id)}
             groups={data.groups.filter(group => group.round_id === row.round.id)}
             groupSongs={data.groupSongs}
+            roundGroups={data.roundGroups}
           />
         ))}
       </RoundSection>
@@ -207,13 +209,15 @@ function RoundCard({ row, currentPhase, controls }) {
   )
 }
 
-function HistoryRound({ row, songs, votes, groups, groupSongs }) {
+function HistoryRound({ row, songs, votes, groups, groupSongs, roundGroups }) {
   const groupIds = new Set(groups.map(group => group.id))
+  const sides = sidesForRound(roundGroups, row.round.id)
   const entries = buildSongEntries({
     songs,
     votes,
     duplicateGroups: groups,
     groupSongs: groupSongs.filter(item => groupIds.has(item.group_id)),
+    sideByPlayerId: sides.isSplit ? sides.sideByPlayerId : null,
   })
   const top = entries.slice(0, 4)
 
@@ -234,7 +238,10 @@ function HistoryRound({ row, songs, votes, groups, groupSongs }) {
             <span className="song-number">{index + 1}</span>
             <div>
               <strong>{entry.title}</strong>
-              <p>{entry.artist} · {entrySubmitterText(entry)}</p>
+              <p>
+                {entry.artist} · {entrySubmitterText(entry)}
+                {entry.side !== null && entry.side !== undefined ? ` · ${groupLabel(entry.side)}` : ''}
+              </p>
             </div>
             <span className="score-mini">{entry.totalPoints}</span>
           </div>

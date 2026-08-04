@@ -43,10 +43,23 @@ Default schedule:
 
 Phase boundaries happen at midnight Pacific. The app computes the correct phase when opened, so no client-side ticking transition or server cron is required.
 
+## Round Sides
+
+A round with at least `MIN_PLAYERS_TO_SPLIT` active players is split into two sides, so nobody has to listen to the whole league in one week.
+
+- Sides live in `round_groups` and are assigned once, when the round becomes current. Whoever opens the app first writes them through the `assign_round_groups` RPC, which is first-writer-wins, so simultaneous clients cannot produce two different splits.
+- `src/lib/groups.js` picks the split by minimising how often the same pair lands together, which keeps season-long pairings even. Do not replace it with a plain shuffle.
+- Submission and voting are scoped to your own side. Song comments follow their song; general round comments follow their author.
+- Appreciation reveals both sides in one ranking. The winner is the top scorer across either side.
+- Duplicate merges may not span sides, enforced in both `create_duplicate_merge` and the admin tool.
+- Late joiners go to the smaller side via `join_round_group`. Sides are never rebalanced mid-round.
+- Below the threshold, or before the migration is applied, the round runs as a single pool exactly as it did before.
+
 ## Core Helpers
 
 - `src/lib/schedule.js` owns Pacific-time scheduling, current round derivation, phase labels, and scored-round detection.
 - `src/lib/scoring.js` owns duplicate-aware song totals and leaderboards.
+- `src/lib/groups.js` owns side assignment, balancing, and side lookup.
 - `src/lib/supabase.js` owns the Supabase client and env-var guard.
 
 Keep scoring rules centralized in `src/lib/scoring.js`; duplicate handling must be identical on Home, Rounds history, and Leaderboard.
@@ -62,9 +75,11 @@ Scoring:
 - Add courtesy points equal to `submitter_count - 1`.
 - Award the final merged total to every duplicate submitter.
 
+Merges only apply within a side. Players on opposite sides never shared a voting pool, so there is no split vote for courtesy points to repair.
+
 ## Schema
 
-The full Season 2 SQL lives in `SETUP.md`. Keep that setup SQL in sync with table assumptions in code.
+The schema source of truth is `supabase/migrations/`; `SETUP.md` documents how to apply it. Keep migrations in sync with table assumptions in code.
 
 ## Profile Pictures
 

@@ -1888,6 +1888,72 @@ select:focus {
   }
 }
 
+.side-name {
+  font-family: var(--font-display);
+  line-height: 1.1;
+}
+
+.side-name.side-0,
+.side-tag.side-0 {
+  color: var(--pink);
+}
+
+.side-name.side-1,
+.side-tag.side-1 {
+  color: #1c7f97;
+}
+
+.side-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.65rem;
+  border: 2px solid;
+  border-radius: 999px;
+  padding: 0.2rem 0.62rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.side-tag.side-0 {
+  background: var(--pink-soft);
+  border-color: var(--pink);
+}
+
+.side-tag.side-1 {
+  background: var(--aqua-soft);
+  border-color: var(--aqua);
+}
+
+.side-banner {
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 2px dashed var(--line);
+}
+
+.side-note {
+  margin-bottom: 0.9rem;
+}
+
+.roster-dot.is-you {
+  color: var(--ink);
+}
+
+.roster-muted .roster-dot {
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+.winner-panel {
+  flex-wrap: wrap;
+}
+
+.winner-entry + .winner-entry {
+  margin-top: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

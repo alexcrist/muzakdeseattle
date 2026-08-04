@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
 import useDebouncedVotes from '../../hooks/useDebouncedVotes.js'
 import { anonymousNameFor } from '../../lib/anonymousNames.js'
+import { groupLabel } from '../../lib/groups.js'
 import { listeningOrderFor } from '../../lib/listeningOrder.js'
 import CommentThread, { RoundThread } from './CommentThread.jsx'
 import { generalComments, searchUrl, serviceLabelForUrl } from './homeUtils.js'
 import ListeningOrderPanel from './ListeningOrderPanel.jsx'
 
-export default function VotingView({ round, player, songs, votes, comments, activePlayers, pointsTotal, onChanged }) {
+export default function VotingView({ round, player, songs, votes, comments, activePlayers, pointsTotal, mySide, onChanged }) {
   const orderedSongs = useMemo(() => (
     listeningOrderFor(songs, { roundId: round.id, playerId: player.id })
   ), [songs, round.id, player.id])
@@ -35,6 +36,12 @@ export default function VotingView({ round, player, songs, votes, comments, acti
   return (
     <section className="phase-layout">
       <aside className="side-panel">
+        {mySide !== null && mySide !== undefined && (
+          <div className="side-banner">
+            <p className="eyebrow">Voting on</p>
+            <h3 className={`side-name side-${mySide}`}>{groupLabel(mySide)}</h3>
+          </div>
+        )}
         <h2>Voting bank</h2>
         <p className="big-stat">{pointsRemaining}</p>
         <p>{pointsRemaining === 0 ? 'All points allocated.' : `${pointsTotal} points available.`}</p>

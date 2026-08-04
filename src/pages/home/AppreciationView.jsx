@@ -1,13 +1,20 @@
 import { useMemo } from 'react'
 import Avatar from '../../components/Avatar.jsx'
+import { groupLabel } from '../../lib/groups.js'
 import { listeningOrderFor } from '../../lib/listeningOrder.js'
 import { buildSongEntries, entrySubmitterText } from '../../lib/scoring.js'
 import CommentThread, { RoundThread } from './CommentThread.jsx'
 import { commentsForEntry, generalComments, playerName } from './homeUtils.js'
 import ListeningOrderPanel from './ListeningOrderPanel.jsx'
 
-export default function AppreciationView({ round, player, songs, votes, comments, duplicateGroups, groupSongs, onChanged }) {
-  const entries = buildSongEntries({ songs, votes, duplicateGroups, groupSongs })
+export default function AppreciationView({ round, player, songs, votes, comments, duplicateGroups, groupSongs, sides, onChanged }) {
+  const entries = useMemo(() => buildSongEntries({
+    songs,
+    votes,
+    duplicateGroups,
+    groupSongs,
+    sideByPlayerId: sides?.isSplit ? sides.sideByPlayerId : null,
+  }), [songs, votes, duplicateGroups, groupSongs, sides])
   const listeningEntries = useMemo(() => (
     listeningOrderFor(entries, {
       roundId: round.id,
@@ -15,20 +22,30 @@ export default function AppreciationView({ round, player, songs, votes, comments
       getId: entry => entry.canonical_song_id || entry.id,
     })
   ), [entries, round.id, player.id])
-  const winner = entries[0]
+
+  // Both sides are ranked together, so the round winner is whichever song topped either side.
+  const topScore = entries[0]?.totalPoints || 0
+  const winners = entries.filter(entry => entry.totalPoints === topScore && topScore > 0)
 
   return (
     <section className="song-stack">
-      {winner && (
+      {winners.length > 0 && (
         <section className="winner-panel">
-          <span className="eyebrow">Round winner</span>
-          <h2>{winner.title}</h2>
-          <p>{winner.artist} by {entrySubmitterText(winner)}</p>
-          <strong>{winner.totalPoints} pts</strong>
+          <span className="eyebrow">{winners.length > 1 ? `Round winners (${winners.length}-way tie)` : 'Round winner'}</span>
+          {winners.map(winner => (
+            <div className="winner-entry" key={winner.id}>
+              <h2>{winner.title}</h2>
+              <p>
+                {winner.artist} by {entrySubmitterText(winner)}
+                {winner.side !== null && winner.side !== undefined ? ` · ${groupLabel(winner.side)}` : ''}
+              </p>
+            </div>
+          ))}
+          <strong>{topScore} pts</strong>
         </section>
       )}
 
-      <RevealCeremony entries={entries} comments={comments} />
+      <RevealCeremony entries={entries} comments={comments} sides={sides} />
 
       <RoundThread
         comments={generalComments(comments)}
@@ -54,6 +71,9 @@ export default function AppreciationView({ round, player, songs, votes, comments
                   <div>
                     <div className="section-heading compact">
                       <h2>{entry.title}</h2>
+                      {entry.side !== null && entry.side !== undefined && (
+                        <span className={`side-tag side-${entry.side}`}>{groupLabel(entry.side)}</span>
+                      )}
                       {entry.isDuplicate && <span className="soft-tag">Merged duplicate</span>}
                     </div>
                     <p>{entry.artist}{entry.album ? ` · ${entry.album}` : ''}</p>
@@ -96,13 +116,19 @@ export default function AppreciationView({ round, player, songs, votes, comments
   )
 }
 
-function RevealCeremony({ entries, comments }) {
+function RevealCeremony({ entries, comments, sides }) {
+  const sideCounts = [0, 1].map(side => entries.filter(entry => entry.side === side).length)
+
   return (
     <section className="reveal-ceremony">
       <span className="phase-pill phase-appreciation">Masks off</span>
       <div>
         <h2>The round is revealed</h2>
-        <p>{entries.length} songs · {comments.length} comments · no more mystery names</p>
+        <p>
+          {sides?.isSplit
+            ? `${groupLabel(0)} ${sideCounts[0]} songs · ${groupLabel(1)} ${sideCounts[1]} songs · ranked together`
+            : `${entries.length} songs · ${comments.length} comments · no more mystery names`}
+        </p>
       </div>
     </section>
   )

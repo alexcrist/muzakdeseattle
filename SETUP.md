@@ -18,7 +18,9 @@ npm run db:link -- --project-ref your-project-ref
 npm run db:push
 ```
 
-The schema source of truth is `supabase/migrations/`. The initial migration creates the Season 2 tables, storage bucket, realtime publication, and public RLS policies. Later migrations keep general round comments and duplicate merging in sync.
+The schema source of truth is `supabase/migrations/`. The initial migration creates the Season 2 tables, storage bucket, realtime publication, and public RLS policies. Later migrations keep general round comments, duplicate merging, and round side splitting in sync.
+
+Apply migrations before deploying app code that depends on them. Until `round_groups` exists the app reads an empty side list and runs every round as a single pool, so an un-migrated database degrades rather than breaking.
 
 If an existing Season 2 database was created manually from an older setup doc, `npm run db:push` can still be used; the baseline migration is written to be idempotent for already-created tables, triggers, policies, storage, and realtime setup.
 
