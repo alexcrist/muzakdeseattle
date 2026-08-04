@@ -1103,6 +1103,18 @@ select:focus {
 .round-card-main {
   display: grid;
   gap: 0.35rem;
+  /* Take the space between the artifact and the controls. Without this the card's
+     space-between leaves a gap beside the artifact and squeezes the text column. */
+  flex: 1;
+  min-width: 0;
+}
+
+/* Grid items stretch by default, which pulls a pill across the whole column.
+   Only applies where a pill sits directly in a grid; inside .hero-topline and
+   other flex rows it already hugs its text. */
+.round-card-main > .phase-pill,
+.hero-surface > .phase-pill {
+  justify-self: start;
 }
 
 .round-meta {
