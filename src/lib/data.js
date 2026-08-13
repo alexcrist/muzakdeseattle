@@ -4,9 +4,11 @@ import { supabase } from './supabase.js'
 const PLAYER_FIELDS = 'id, name, avatar_url, avatar_color'
 const ROUND_WITH_PLAYER = `*, players(${PLAYER_FIELDS})`
 const SONG_WITH_PLAYER = `*, players(${PLAYER_FIELDS})`
-const COMMENT_WITH_PLAYER = `*, players(${PLAYER_FIELDS})`
+// Pin this to the direct author relationship. comment_likes also links comments
+// and players, so an unqualified `players(...)` embed is ambiguous to PostgREST.
+const COMMENT_WITH_PLAYER = `*, players!comments_player_id_fkey(${PLAYER_FIELDS})`
 
-export const HOME_REALTIME_TABLES = ['rounds', 'songs', 'votes', 'comments', 'duplicate_groups', 'duplicate_group_songs', 'players', 'round_groups', 'round_playlists']
+export const HOME_REALTIME_TABLES = ['rounds', 'songs', 'votes', 'comments', 'comment_likes', 'duplicate_groups', 'duplicate_group_songs', 'players', 'round_groups', 'round_playlists']
 export const ROUNDS_REALTIME_TABLES = ['rounds', 'songs', 'votes', 'duplicate_groups', 'duplicate_group_songs', 'round_groups']
 export const PLAYER_REALTIME_TABLES = ['players', 'rounds', 'songs', 'votes', 'duplicate_groups', 'duplicate_group_songs', 'round_groups']
 export const ADMIN_REALTIME_TABLES = ['rounds', 'songs', 'votes', 'duplicate_groups', 'duplicate_group_songs', 'players', 'round_groups']
@@ -17,6 +19,7 @@ export const EMPTY_HOME_DATA = {
   songs: [],
   votes: [],
   comments: [],
+  commentLikes: [],
   duplicateGroups: [],
   groupSongs: [],
   roundGroups: [],
@@ -105,6 +108,7 @@ export async function fetchHomeData() {
     { data: songs },
     { data: votes },
     { data: comments },
+    { data: commentLikes },
     { data: duplicateGroups },
     { data: groupSongs },
     { data: roundGroups },
@@ -115,6 +119,7 @@ export async function fetchHomeData() {
     supabase.from('songs').select(SONG_WITH_PLAYER).order('created_at'),
     supabase.from('votes').select('*'),
     supabase.from('comments').select(COMMENT_WITH_PLAYER).order('created_at'),
+    supabase.from('comment_likes').select('*'),
     supabase.from('duplicate_groups').select('*'),
     supabase.from('duplicate_group_songs').select('*'),
     supabase.from('round_groups').select('*'),
@@ -127,6 +132,7 @@ export async function fetchHomeData() {
     songs: songs || [],
     votes: votes || [],
     comments: comments || [],
+    commentLikes: commentLikes || [],
     duplicateGroups: duplicateGroups || [],
     groupSongs: groupSongs || [],
     roundGroups: roundGroups || [],

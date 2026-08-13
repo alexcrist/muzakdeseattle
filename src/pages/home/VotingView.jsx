@@ -14,6 +14,7 @@ export default function VotingView({
   songs,
   votes,
   comments,
+  commentLikes,
   activePlayers,
   pointsTotal,
   mySide,
@@ -161,7 +162,6 @@ export default function VotingView({
                     <div>
                       <h2>{song.title}</h2>
                       <p>{song.artist}{song.album ? ` · ${song.album}` : ''}</p>
-                      {song.submitter_note && <p className="note">{song.submitter_note}</p>}
                     </div>
                   </div>
 
@@ -171,6 +171,8 @@ export default function VotingView({
                     <a href={searchUrl('tidal', song)} target="_blank" rel="noreferrer">TIDAL</a>
                     <a href={searchUrl('youtube', song)} target="_blank" rel="noreferrer">YouTube</a>
                   </div>
+
+                  {song.submitter_note && <p className="note">{song.submitter_note}</p>}
 
                   {!isViewingOther && (
                     <div className="vote-control vote-column">
@@ -194,6 +196,7 @@ export default function VotingView({
 
                   <CommentThread
                     comments={songComments}
+                    commentLikes={commentLikes}
                     player={player}
                     revealAuthors={false}
                     anonymousLabelFor={anonymousLabelFor}

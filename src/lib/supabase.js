@@ -25,7 +25,8 @@ export const supabase = createClient(
 // - songs(id, round_id, player_id, artist, title, album, link,
 //   submitter_note, created_at, updated_at)
 // - votes(id, round_id, song_id, voter_player_id, points, created_at, updated_at)
-// - comments(id, round_id, nullable song_id, player_id, body, created_at)
+// - comments(id, round_id, nullable song_id, player_id, body, gif_url,
+//   gif_preview_url, gif_provider, gif_id, created_at)
 // - duplicate_groups(id, round_id, canonical_song_id, label, created_at, updated_at)
 // - duplicate_group_songs(id, group_id, song_id, created_at)
 //

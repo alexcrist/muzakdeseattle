@@ -16,6 +16,8 @@ VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
+Optional: add `VITE_GIPHY_API_KEY` to enable the GIF search picker in comments.
+
 Existing `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` values are still accepted for compatibility.
 
 ## Development

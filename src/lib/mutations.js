@@ -55,14 +55,44 @@ export async function persistVote({ roundId, songId, playerId, points }) {
   if (error) throw error
 }
 
-export async function postComment({ roundId, songId, playerId, body }) {
+export async function postComment({ roundId, songId, playerId, body, gifUrl = null, gifPreviewUrl = null, gifProvider = null, gifId = null }) {
   const { error } = await supabase.from('comments').insert({
     round_id: roundId,
     song_id: songId || null,
     player_id: playerId,
     body,
+    gif_url: gifUrl,
+    gif_preview_url: gifPreviewUrl,
+    gif_provider: gifProvider,
+    gif_id: gifId,
   })
 
+  return { error }
+}
+
+export async function deleteComment({ commentId, playerId }) {
+  const { error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('player_id', playerId)
+
+  return { error }
+}
+
+export async function toggleCommentLike({ commentId, playerId, liked }) {
+  if (liked) {
+    const { error } = await supabase
+      .from('comment_likes')
+      .delete()
+      .eq('comment_id', commentId)
+      .eq('player_id', playerId)
+    return { error }
+  }
+
+  const { error } = await supabase
+    .from('comment_likes')
+    .upsert({ comment_id: commentId, player_id: playerId }, { onConflict: 'comment_id,player_id' })
   return { error }
 }
 

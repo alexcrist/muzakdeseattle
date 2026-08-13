@@ -7,7 +7,7 @@ import CommentThread, { RoundThread } from './CommentThread.jsx'
 import { commentsForEntry, generalComments, playerName } from './homeUtils.js'
 import ListeningOrderPanel from './ListeningOrderPanel.jsx'
 
-export default function AppreciationView({ round, player, songs, votes, comments, duplicateGroups, groupSongs, sides, onChanged }) {
+export default function AppreciationView({ round, player, songs, votes, comments, commentLikes, duplicateGroups, groupSongs, sides, onChanged }) {
   const entries = useMemo(() => buildSongEntries({
     songs,
     votes,
@@ -49,6 +49,7 @@ export default function AppreciationView({ round, player, songs, votes, comments
 
       <RoundThread
         comments={generalComments(comments)}
+        commentLikes={commentLikes}
         player={player}
         revealAuthors
         onChanged={onChanged}
@@ -102,6 +103,7 @@ export default function AppreciationView({ round, player, songs, votes, comments
 
               <CommentThread
                 comments={commentsForEntry(comments, entry)}
+                commentLikes={commentLikes}
                 player={player}
                 revealAuthors
                 songId={entry.canonical_song_id}

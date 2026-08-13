@@ -903,7 +903,7 @@ select:focus {
   grid-row: 1;
   align-self: start;
   justify-content: flex-end;
-  gap: 0.35rem;
+  gap: 0.7rem;
   margin-top: 0.05rem;
 }
 
@@ -924,8 +924,11 @@ select:focus {
 }
 
 .voting-song-card .note {
-  margin-top: 0.35rem;
+  grid-column: 1 / 3;
+  margin-top: 0;
+  margin-left: 0;
   padding: 0.38rem 0.55rem;
+  font-style: italic;
   font-size: 0.88rem;
 }
 
@@ -970,6 +973,10 @@ select:focus {
 }
 
 .voting-song-card.is-no-vote .comments-block {
+  grid-column: 1 / -1;
+}
+
+.voting-song-card.is-no-vote .note {
   grid-column: 1 / -1;
 }
 
@@ -1294,6 +1301,96 @@ select:focus {
   font-size: 0.93rem;
 }
 
+.comment-gif {
+  display: block;
+  width: min(100%, 17rem);
+  max-height: 17rem;
+  margin-top: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  object-fit: contain;
+}
+
+.comment-actions {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.3rem;
+  gap: 0.8rem;
+}
+
+.comment-like {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.comment-like:hover,
+.comment-like:focus-visible,
+.comment-like.is-liked {
+  color: var(--pink);
+}
+
+.comment-like:focus-visible {
+  outline: 2px solid var(--grape);
+  outline-offset: 2px;
+}
+
+.comment-like:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.comment-delete {
+  display: inline-grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--quiet);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.comment-delete svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.comment-delete:hover,
+.comment-delete:focus-visible {
+  color: var(--pink);
+}
+
+.comment-delete:focus-visible {
+  outline: 2px solid var(--grape);
+  outline-offset: 2px;
+}
+
+.comment-delete:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.voting-song-card .compact-comments .comment-like {
+  margin-top: 0.2rem;
+}
+
 .anon-avatar {
   display: inline-grid;
   place-items: center;
@@ -1314,6 +1411,116 @@ select:focus {
 
 .comment-form input {
   min-width: 0;
+}
+
+.gif-toggle {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.selected-gif {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.selected-gif img {
+  width: 5rem;
+  height: 3.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  object-fit: cover;
+}
+
+.selected-gif .icon-btn {
+  width: 1.6rem;
+  height: 1.6rem;
+  min-height: 1.6rem;
+  border-color: var(--line);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.gif-picker {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 0.6rem;
+}
+
+.gif-search-form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.gif-search-form input {
+  min-width: 0;
+}
+
+.gif-results {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.gif-results button {
+  aspect-ratio: 1.2;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: var(--surface);
+  padding: 0;
+  cursor: pointer;
+}
+
+.gif-results button:hover,
+.gif-results button:focus-visible {
+  outline: 2px solid var(--grape);
+  outline-offset: 1px;
+}
+
+.gif-results img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gif-credit,
+.gif-helper {
+  margin: 0;
+  color: var(--quiet);
+  font-size: 0.72rem;
+}
+
+.voting-song-card .compact-comments .comment-gif {
+  width: min(100%, 11rem);
+  max-height: 11rem;
+}
+
+.voting-song-card .compact-comments .gif-picker {
+  padding: 0.45rem;
+}
+
+.voting-song-card .compact-comments .gif-search-form input {
+  min-height: 2rem;
+  border-color: var(--line);
+  background: transparent;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+.voting-song-card .compact-comments .gif-search-form .btn {
+  min-height: 2rem;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.72rem;
 }
 
 .winner-panel {
