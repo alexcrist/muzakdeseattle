@@ -34,7 +34,7 @@ export default function ListeningOrderPanel({ items }) {
             </div>
             <div className="listening-actions">
               {song.link && <a href={song.link} target="_blank" rel="noreferrer">{serviceLabelForUrl(song.link)}</a>}
-              <a href={searchUrl('spotify', song)} target="_blank" rel="noreferrer">Spotify</a>
+              {serviceLabelForUrl(song.link) !== 'Spotify' && <a href={searchUrl('spotify', song)} target="_blank" rel="noreferrer">Spotify</a>}
               <a href={searchUrl('tidal', song)} target="_blank" rel="noreferrer">TIDAL</a>
               <a href={searchUrl('youtube', song)} target="_blank" rel="noreferrer">YouTube</a>
             </div>

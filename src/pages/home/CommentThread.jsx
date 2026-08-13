@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Avatar from '../../components/Avatar.jsx'
 import { postComment as saveComment } from '../../lib/mutations.js'
 
-export default function CommentThread({ comments, player, revealAuthors, anonymousLabelFor, songId, roundId, onChanged }) {
+export default function CommentThread({ comments, player, revealAuthors, anonymousLabelFor, songId, roundId, onChanged, compact = false }) {
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -30,7 +30,7 @@ export default function CommentThread({ comments, player, revealAuthors, anonymo
   }
 
   return (
-    <div className="comments-block">
+    <div className={`comments-block ${compact ? 'compact-comments' : ''}`}>
       {comments.length > 0 && (
         <div className="comments-list">
           {comments.map(comment => {
@@ -39,11 +39,12 @@ export default function CommentThread({ comments, player, revealAuthors, anonymo
             const anonymousName = anonymousLabelFor ? anonymousLabelFor(comment.player_id) : 'Anonymous'
             return (
               <div className={`comment ${author ? '' : 'anonymous-comment'}`} key={comment.id}>
-                {author ? (
+                {compact && <span className="comment-mark" aria-hidden="true">↳</span>}
+                {!compact && (author ? (
                   <Avatar player={author} size="xs" />
                 ) : (
                   <Avatar player={{ id: `anon-${roundId}-${comment.player_id}`, name: anonymousName }} size="xs" />
-                )}
+                ))}
                 <div>
                   <strong className={author ? '' : 'anon-name'}>{author ? `${author.name}${isMine ? ' (you)' : ''}` : `${anonymousName}${isMine ? ' (you)' : ''}`}</strong>
                   <p>{comment.body}</p>

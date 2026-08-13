@@ -302,9 +302,14 @@ export function formatPacificDate(dateOrKey, options = {}) {
 export function formatPhaseDateRange(range) {
   const start = formatPacificDate(range.startDate, { weekday: 'short' })
   const endDate = addDays(range.endDate, -1)
+  const phase = PHASES[range.phase]?.shortLabel || 'Off'
+
+  if (range.phase === 'submission' || range.phase === 'voting') {
+    return `${phase} until ${formatPacificDate(endDate)}`
+  }
+
   const end = formatPacificDate(endDate, { weekday: 'short' })
-  const phase = PHASES[range.phase]?.label || 'Off'
-  return start === end ? `${phase}: ${start}` : `${phase}: ${start}-${end}`
+  return start === end ? `${phase} ${start}` : `${phase} ${start}–${end}`
 }
 
 export function formatCountdownParts(targetDate) {

@@ -5,9 +5,8 @@ import useRealtimeData from '../hooks/useRealtimeData.js'
 import { EMPTY_HOME_DATA, fetchHomeData, HOME_REALTIME_TABLES } from '../lib/data.js'
 import { buildRoundGroupAssignment, shouldSplitRound, sideOf, sidesForRound } from '../lib/groups.js'
 import { assignRoundGroups, joinRoundGroup } from '../lib/mutations.js'
-import { formatPacificDate, getLeagueContext, getRoundTiming, PHASES } from '../lib/schedule.js'
+import { formatPacificDate, formatPhaseDateRange, getLeagueContext, getRoundTiming } from '../lib/schedule.js'
 import AppreciationView from './home/AppreciationView.jsx'
-import { phaseHint, phaseTitle } from './home/homeUtils.js'
 import SubmissionView from './home/SubmissionView.jsx'
 import VotingView from './home/VotingView.jsx'
 
@@ -155,7 +154,6 @@ export default function HomePage() {
   }
 
   const timing = getRoundTiming(currentRound, context.currentRoundIndex, settings, now)
-  const nextPhaseLabel = PHASES[context.nextPhase]?.label || 'next phase'
   const awaitingSides = sides.isSplit && mySide === null
 
   return (
@@ -167,19 +165,14 @@ export default function HomePage() {
         </div>
         <h1>{currentRound.theme_name}</h1>
         {currentRound.theme_description && <p>{currentRound.theme_description}</p>}
-        <div className="phase-summary">
-          {timing.phaseRanges.map(range => (
-            <span key={`${range.phase}-${range.startDate}`}>{PHASES[range.phase]?.shortLabel || 'Off'} {formatPacificDate(range.startDate, { weekday: 'short' })}</span>
-          ))}
+        <div className="hero-footer">
+          <div className="phase-summary">
+            {timing.phaseRanges.map(range => (
+              <span key={`${range.phase}-${range.startDate}`}>{formatPhaseDateRange(range)}</span>
+            ))}
+          </div>
+          <Countdown target={context.nextPhaseAt} />
         </div>
-      </section>
-
-      <section className="status-strip">
-        <div>
-          <p className="eyebrow">{phaseTitle(context.phase)}</p>
-          <p>{phaseHint(context.phase)}</p>
-        </div>
-        <Countdown target={context.nextPhaseAt} label={`Next: ${nextPhaseLabel}`} />
       </section>
 
       {awaitingSides && context.phase !== 'appreciation' ? (
@@ -214,6 +207,8 @@ export default function HomePage() {
               otherSide={roundData.otherSide}
               otherSideSongs={roundData.otherSideSongs}
               otherSideComments={roundData.otherSideComments}
+              allPlayers={activePlayers}
+              sides={sides}
               onChanged={reload}
             />
           )}
