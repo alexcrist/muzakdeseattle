@@ -1094,6 +1094,83 @@ select:focus {
   margin-bottom: 0;
 }
 
+.playlist-panel {
+  display: grid;
+  gap: 0.45rem;
+  border-left: 3px solid var(--aqua);
+  padding-left: 0.7rem;
+}
+
+.playlist-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.playlist-add {
+  border: 0;
+  background: transparent;
+  color: #154151;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.playlist-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.playlist-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.16rem 0.35rem 0.16rem 0.55rem;
+  background: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.playlist-link button {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--quiet);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.playlist-link button:hover {
+  background: var(--pink-soft);
+  color: var(--pink);
+}
+
+.playlist-empty {
+  font-size: 0.82rem;
+}
+
+.playlist-form {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.45fr) minmax(0, 1fr) auto;
+  gap: 0.4rem;
+}
+
+.playlist-form input {
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+}
+
 .voting-side-roster {
   padding-left: 0.6rem;
   border-left: 4px solid var(--pink);
@@ -2328,6 +2405,10 @@ select:focus {
     flex-direction: row;
   }
 
+  .playlist-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
   .listening-row {
     grid-template-columns: 2rem minmax(0, 1fr);
   }
@@ -2378,6 +2459,10 @@ select:focus {
 
   .voting-song-card .comments-block {
     grid-column: 1;
+  }
+
+  .playlist-form {
+    grid-template-columns: 1fr;
   }
 
   .nav {

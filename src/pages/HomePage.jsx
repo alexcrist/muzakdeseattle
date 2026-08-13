@@ -89,6 +89,7 @@ export default function HomePage() {
     const roundGroups = data.duplicateGroups.filter(group => group.round_id === currentRound.id)
     const groupIds = new Set(roundGroups.map(group => group.id))
     const roundGroupSongs = data.groupSongs.filter(row => groupIds.has(row.group_id))
+    const roundPlaylists = data.playlists.filter(playlist => playlist.round_id === currentRound.id)
 
     // During submission and voting a player only ever votes on their own side. Song comments follow
     // their song; general round comments follow their author, so nothing leaks across the split.
@@ -118,6 +119,7 @@ export default function HomePage() {
       roundComments,
       roundGroups,
       roundGroupSongs,
+      roundPlaylists,
       mySideSongs,
       mySideVotes,
       mySideComments,
@@ -207,6 +209,7 @@ export default function HomePage() {
               otherSide={roundData.otherSide}
               otherSideSongs={roundData.otherSideSongs}
               otherSideComments={roundData.otherSideComments}
+              playlists={roundData.roundPlaylists}
               allPlayers={activePlayers}
               sides={sides}
               onChanged={reload}

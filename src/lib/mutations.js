@@ -66,6 +66,22 @@ export async function postComment({ roundId, songId, playerId, body }) {
   return { error }
 }
 
+export async function addRoundPlaylist({ roundId, groupIndex, service, url }) {
+  const { error } = await supabase.from('round_playlists').insert({
+    round_id: roundId,
+    group_index: groupIndex,
+    service: service.trim() || 'Playlist',
+    url: url.trim(),
+  })
+
+  return { error }
+}
+
+export async function deleteRoundPlaylist(playlistId) {
+  const { error } = await supabase.from('round_playlists').delete().eq('id', playlistId)
+  return { error }
+}
+
 export async function addRound({ form, playerId, context }) {
   const nextPosition = context.orderedRounds.length
   const weekStart = addDays(context.startDate, nextPosition * 7)

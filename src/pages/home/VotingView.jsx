@@ -4,6 +4,7 @@ import useDebouncedVotes from '../../hooks/useDebouncedVotes.js'
 import { anonymousNameFor } from '../../lib/anonymousNames.js'
 import { groupLabel } from '../../lib/groups.js'
 import { listeningOrderFor } from '../../lib/listeningOrder.js'
+import { addRoundPlaylist, deleteRoundPlaylist } from '../../lib/mutations.js'
 import CommentThread from './CommentThread.jsx'
 import { copyTextFor, searchUrl, serviceLabelForUrl } from './homeUtils.js'
 
@@ -19,6 +20,7 @@ export default function VotingView({
   otherSide,
   otherSideSongs = [],
   otherSideComments = [],
+  playlists = [],
   allPlayers,
   sides,
   onChanged,
@@ -40,6 +42,8 @@ export default function VotingView({
 
   const activeSongs = isViewingOther ? otherOrderedSongs : orderedSongs
   const activeComments = isViewingOther ? otherSideComments : comments
+  const activeSide = isViewingOther ? otherSide : (mySide ?? 0)
+  const activePlaylists = playlists.filter(playlist => playlist.group_index === activeSide)
   const mySidePlayers = mySide === null ? activePlayers : allPlayers.filter(row => sides.sideByPlayerId[row.id] === mySide)
   const otherSidePlayers = otherSide === null ? [] : allPlayers.filter(row => sides.sideByPlayerId[row.id] === otherSide)
   const {
@@ -133,6 +137,13 @@ export default function VotingView({
           </button>
         </div>
 
+        <PlaylistPanel
+          playlists={activePlaylists}
+          roundId={round.id}
+          side={activeSide}
+          onChanged={onChanged}
+        />
+
         {activeSongs.length === 0 ? (
           <div className="empty-state">
             <h2>No songs yet</h2>
@@ -207,6 +218,76 @@ export default function VotingView({
           </section>
         </div>
       )}
+    </section>
+  )
+}
+
+function PlaylistPanel({ playlists, roundId, side, onChanged }) {
+  const [isAdding, setIsAdding] = useState(false)
+  const [service, setService] = useState('')
+  const [url, setUrl] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function addPlaylist(event) {
+    event.preventDefault()
+    if (!url.trim()) return
+
+    setSaving(true)
+    setError('')
+    const { error: saveError } = await addRoundPlaylist({
+      roundId,
+      groupIndex: side,
+      service: service || serviceLabelForUrl(url),
+      url,
+    })
+    setSaving(false)
+    if (saveError) {
+      setError(saveError.code === '23505' ? 'That playlist is already listed.' : 'Could not save this playlist.')
+      return
+    }
+    setService('')
+    setUrl('')
+    setIsAdding(false)
+    onChanged()
+  }
+
+  async function removePlaylist(playlistId) {
+    const { error: deleteError } = await deleteRoundPlaylist(playlistId)
+    if (deleteError) {
+      setError('Could not remove this playlist.')
+      return
+    }
+    onChanged()
+  }
+
+  return (
+    <section className="playlist-panel">
+      <div className="playlist-heading">
+        <p className="eyebrow">Shared playlists</p>
+        <button type="button" className="playlist-add" onClick={() => setIsAdding(value => !value)}>
+          {isAdding ? 'Close' : 'Add link'}
+        </button>
+      </div>
+      {playlists.length > 0 && (
+        <div className="playlist-links">
+          {playlists.map(playlist => (
+            <span className="playlist-link" key={playlist.id}>
+              <a href={playlist.url} target="_blank" rel="noreferrer">{playlist.service || serviceLabelForUrl(playlist.url)}</a>
+              <button type="button" aria-label={`Remove ${playlist.service || 'playlist'}`} onClick={() => removePlaylist(playlist.id)}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {!isAdding && playlists.length === 0 && <p className="muted playlist-empty">No playlist link yet.</p>}
+      {isAdding && (
+        <form className="playlist-form" onSubmit={addPlaylist}>
+          <input value={service} onChange={event => setService(event.target.value)} placeholder="Service (e.g. Spotify)" />
+          <input type="url" value={url} onChange={event => setUrl(event.target.value)} placeholder="Playlist link" required />
+          <button type="submit" className="btn btn-secondary btn-sm" disabled={saving || !url.trim()}>{saving ? 'Saving...' : 'Save link'}</button>
+        </form>
+      )}
+      {error && <p className="error-msg">{error}</p>}
     </section>
   )
 }
