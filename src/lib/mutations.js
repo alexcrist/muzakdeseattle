@@ -66,12 +66,13 @@ export async function postComment({ roundId, songId, playerId, body }) {
   return { error }
 }
 
-export async function addRoundPlaylist({ roundId, groupIndex, service, url }) {
+export async function addRoundPlaylist({ roundId, groupIndex, service, url, embedUrl = null }) {
   const { error } = await supabase.from('round_playlists').insert({
     round_id: roundId,
     group_index: groupIndex,
     service: service.trim() || 'Playlist',
     url: url.trim(),
+    embed_url: embedUrl,
   })
 
   return { error }

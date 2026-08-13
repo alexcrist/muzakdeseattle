@@ -1120,8 +1120,7 @@ select:focus {
 }
 
 .playlist-links {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 0.4rem;
 }
 
@@ -1136,6 +1135,24 @@ select:focus {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.playlist-link.has-embed {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.playlist-embed {
+  width: min(100%, 500px);
+  height: 275px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
 }
 
 .playlist-link button {
