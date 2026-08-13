@@ -224,7 +224,6 @@ export default function VotingView({
 
 function PlaylistPanel({ playlists, roundId, side, onChanged }) {
   const [isAdding, setIsAdding] = useState(false)
-  const [service, setService] = useState('')
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -238,7 +237,7 @@ function PlaylistPanel({ playlists, roundId, side, onChanged }) {
     const { error: saveError } = await addRoundPlaylist({
       roundId,
       groupIndex: side,
-      service: service || serviceLabelForUrl(url),
+      service: serviceLabelForUrl(url),
       url,
     })
     setSaving(false)
@@ -246,7 +245,6 @@ function PlaylistPanel({ playlists, roundId, side, onChanged }) {
       setError(saveError.code === '23505' ? 'That playlist is already listed.' : 'Could not save this playlist.')
       return
     }
-    setService('')
     setUrl('')
     setIsAdding(false)
     onChanged()
@@ -282,7 +280,6 @@ function PlaylistPanel({ playlists, roundId, side, onChanged }) {
       {!isAdding && playlists.length === 0 && <p className="muted playlist-empty">No playlist link yet.</p>}
       {isAdding && (
         <form className="playlist-form" onSubmit={addPlaylist}>
-          <input value={service} onChange={event => setService(event.target.value)} placeholder="Service (e.g. Spotify)" />
           <input type="url" value={url} onChange={event => setUrl(event.target.value)} placeholder="Playlist link" required />
           <button type="submit" className="btn btn-secondary btn-sm" disabled={saving || !url.trim()}>{saving ? 'Saving...' : 'Save link'}</button>
         </form>

@@ -1161,7 +1161,7 @@ select:focus {
 
 .playlist-form {
   display: grid;
-  grid-template-columns: minmax(7rem, 0.45fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.4rem;
 }
 
@@ -2406,7 +2406,7 @@ select:focus {
   }
 
   .playlist-form {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .listening-row {
