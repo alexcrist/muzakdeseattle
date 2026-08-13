@@ -1119,8 +1119,14 @@ select:focus {
   cursor: pointer;
 }
 
+.playlist-controls {
+  display: inline-flex;
+  gap: 0.65rem;
+}
+
 .playlist-links {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
 }
 
@@ -1130,7 +1136,7 @@ select:focus {
   gap: 0.25rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 0.16rem 0.35rem 0.16rem 0.55rem;
+  padding: 0.16rem 0.55rem;
   background: #fff;
   font-family: var(--font-mono);
   font-size: 0.72rem;

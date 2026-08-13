@@ -223,6 +223,7 @@ export default function VotingView({
 }
 
 function PlaylistPanel({ playlists, roundId, side, onChanged }) {
+  const [isEditing, setIsEditing] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
@@ -261,27 +262,38 @@ function PlaylistPanel({ playlists, roundId, side, onChanged }) {
     onChanged()
   }
 
+  function toggleEditing() {
+    setIsEditing(editing => !editing)
+    setIsAdding(false)
+    setConfirmingId(null)
+  }
+
   return (
     <section className="playlist-panel">
       <div className="playlist-heading">
         <p className="eyebrow">Shared playlists</p>
-        <button type="button" className="playlist-add" onClick={() => setIsAdding(value => !value)}>
-          {isAdding ? 'Close' : 'Add link'}
-        </button>
+        <div className="playlist-controls">
+          {isEditing && (
+            <button type="button" className="playlist-add" onClick={() => setIsAdding(value => !value)}>
+              {isAdding ? 'Close' : 'Add link'}
+            </button>
+          )}
+          <button type="button" className="playlist-add" onClick={toggleEditing}>{isEditing ? 'Done' : 'Edit'}</button>
+        </div>
       </div>
       {playlists.length > 0 && (
         <div className="playlist-links">
           {playlists.map(playlist => (
             <span className="playlist-link" key={playlist.id}>
               <a href={playlist.url} target="_blank" rel="noreferrer">{playlist.service || serviceLabelForUrl(playlist.url)}</a>
-              {confirmingId === playlist.id ? (
+              {isEditing && confirmingId === playlist.id ? (
                 <span className="playlist-delete-confirm">
                   <button type="button" onClick={() => removePlaylist(playlist.id)}>Remove?</button>
                   <button type="button" onClick={() => setConfirmingId(null)}>Keep</button>
                 </span>
-              ) : (
+              ) : isEditing ? (
                 <button type="button" aria-label={`Remove ${playlist.service || 'playlist'}`} onClick={() => setConfirmingId(playlist.id)}>×</button>
-              )}
+              ) : null}
             </span>
           ))}
         </div>
