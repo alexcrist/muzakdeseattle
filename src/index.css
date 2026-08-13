@@ -1137,24 +1137,6 @@ select:focus {
   font-weight: 800;
 }
 
-.playlist-link.has-embed {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0;
-}
-
-.playlist-embed {
-  width: min(100%, 500px);
-  height: 275px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-3);
-}
-
 .playlist-link button {
   width: 1.1rem;
   height: 1.1rem;
@@ -1165,6 +1147,30 @@ select:focus {
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
+}
+
+.playlist-delete-confirm {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+.playlist-delete-confirm button {
+  width: auto;
+  height: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  background: #fff;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.playlist-delete-confirm button:first-child:hover {
+  border-color: var(--pink);
+  background: var(--pink-soft);
+  color: var(--pink);
 }
 
 .playlist-link button:hover {

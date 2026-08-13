@@ -227,25 +227,19 @@ function PlaylistPanel({ playlists, roundId, side, onChanged }) {
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [confirmingId, setConfirmingId] = useState(null)
 
   async function addPlaylist(event) {
     event.preventDefault()
     if (!url.trim()) return
-
-    const playlist = playlistInput(url)
-    if (!playlist) {
-      setError('Paste a playlist link or an iframe embed code.')
-      return
-    }
 
     setSaving(true)
     setError('')
     const { error: saveError } = await addRoundPlaylist({
       roundId,
       groupIndex: side,
-      service: serviceLabelForUrl(playlist.url),
-      url: playlist.url,
-      embedUrl: playlist.embedUrl,
+      service: serviceLabelForUrl(url),
+      url,
     })
     setSaving(false)
     if (saveError) {
@@ -263,6 +257,7 @@ function PlaylistPanel({ playlists, roundId, side, onChanged }) {
       setError('Could not remove this playlist.')
       return
     }
+    setConfirmingId(null)
     onChanged()
   }
 
@@ -277,47 +272,30 @@ function PlaylistPanel({ playlists, roundId, side, onChanged }) {
       {playlists.length > 0 && (
         <div className="playlist-links">
           {playlists.map(playlist => (
-            <div className={`playlist-link ${playlist.embed_url ? 'has-embed' : ''}`} key={playlist.id}>
-              {playlist.embed_url ? (
-                <iframe
-                  className="playlist-embed"
-                  src={playlist.embed_url}
-                  title={`${playlist.service || 'Playlist'} player`}
-                  allow="encrypted-media; fullscreen; clipboard-write; web-share"
-                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-                />
+            <span className="playlist-link" key={playlist.id}>
+              <a href={playlist.url} target="_blank" rel="noreferrer">{playlist.service || serviceLabelForUrl(playlist.url)}</a>
+              {confirmingId === playlist.id ? (
+                <span className="playlist-delete-confirm">
+                  <button type="button" onClick={() => removePlaylist(playlist.id)}>Remove?</button>
+                  <button type="button" onClick={() => setConfirmingId(null)}>Keep</button>
+                </span>
               ) : (
-                <a href={playlist.url} target="_blank" rel="noreferrer">{playlist.service || serviceLabelForUrl(playlist.url)}</a>
+                <button type="button" aria-label={`Remove ${playlist.service || 'playlist'}`} onClick={() => setConfirmingId(playlist.id)}>×</button>
               )}
-              <button type="button" aria-label={`Remove ${playlist.service || 'playlist'}`} onClick={() => removePlaylist(playlist.id)}>×</button>
-            </div>
+            </span>
           ))}
         </div>
       )}
       {!isAdding && playlists.length === 0 && <p className="muted playlist-empty">No playlist link yet.</p>}
       {isAdding && (
         <form className="playlist-form" onSubmit={addPlaylist}>
-          <input value={url} onChange={event => setUrl(event.target.value)} placeholder="Playlist link or iframe embed code" required />
+          <input type="url" value={url} onChange={event => setUrl(event.target.value)} placeholder="Playlist link" required />
           <button type="submit" className="btn btn-secondary btn-sm" disabled={saving || !url.trim()}>{saving ? 'Saving...' : 'Save link'}</button>
         </form>
       )}
       {error && <p className="error-msg">{error}</p>}
     </section>
   )
-}
-
-function playlistInput(value) {
-  const trimmed = value.trim()
-  const iframeMatch = trimmed.match(/<iframe\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1/i)
-  const source = iframeMatch ? iframeMatch[2] : trimmed
-
-  try {
-    const parsed = new URL(source)
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
-    return { url: parsed.href, embedUrl: iframeMatch ? parsed.href : null }
-  } catch {
-    return null
-  }
 }
 
 function VoteTokenBank({ total, used }) {
