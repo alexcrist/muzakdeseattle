@@ -24,12 +24,24 @@ export default function PlayerPage() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [isEditingProfile, setIsEditingProfile] = useState(false)
+  const [isAvatarLightboxOpen, setIsAvatarLightboxOpen] = useState(false)
   const [message, setMessage] = useState('')
 
   useEffect(() => {
     if (playerId !== player.id) return
     setProfile({ name: player.name, avatar_url: player.avatar_url || '' })
   }, [playerId, player.id, player.name, player.avatar_url])
+
+  useEffect(() => {
+    if (!isAvatarLightboxOpen) return undefined
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setIsAvatarLightboxOpen(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isAvatarLightboxOpen])
 
   const viewedPlayer = data.players.find(row => row.id === playerId)
   const isSelf = playerId === player.id
@@ -206,7 +218,18 @@ export default function PlayerPage() {
       </section>
 
       <section className={`player-profile-hero ${displayPlayer.active ? '' : 'inactive'}`}>
-        <Avatar player={displayPlayer} size="hero" />
+        {displayPlayer.avatar_url ? (
+          <button
+            type="button"
+            className="profile-avatar-button"
+            onClick={() => setIsAvatarLightboxOpen(true)}
+            aria-label={`Enlarge ${displayPlayer.name}'s profile picture`}
+          >
+            <Avatar player={displayPlayer} size="hero" linkToProfile={false} />
+          </button>
+        ) : (
+          <Avatar player={displayPlayer} size="hero" linkToProfile={false} />
+        )}
         <div className="player-profile-main">
           <div>
             <p className="eyebrow">{isSelf ? 'My profile' : displayPlayer.active ? 'Active player' : 'Inactive player'}</p>
@@ -241,6 +264,15 @@ export default function PlayerPage() {
           </span>
         </div>
       </section>
+
+      {isAvatarLightboxOpen && displayPlayer.avatar_url && (
+        <div className="profile-image-lightbox-backdrop" role="presentation" onMouseDown={() => setIsAvatarLightboxOpen(false)}>
+          <section className="profile-image-lightbox" role="dialog" aria-modal="true" aria-label={`${displayPlayer.name}'s profile picture`} onMouseDown={event => event.stopPropagation()}>
+            <button type="button" className="profile-image-lightbox-close" onClick={() => setIsAvatarLightboxOpen(false)} aria-label="Close enlarged profile picture">×</button>
+            <img src={displayPlayer.avatar_url} alt={`${displayPlayer.name}'s profile picture`} />
+          </section>
+        </div>
+      )}
 
       {isSelf && isEditingProfile && (
         <section className="profile-editor card">

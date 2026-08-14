@@ -83,7 +83,7 @@ export default function JoinScreen({ onJoin }) {
                   className="profile-choice"
                   onClick={() => onJoin(player)}
                 >
-                  <Avatar player={player} />
+                  <Avatar player={player} linkToProfile={false} />
                   <span>{player.name}</span>
                 </button>
               ))}

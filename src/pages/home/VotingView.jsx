@@ -158,21 +158,35 @@ export default function VotingView({
               const currentVote = draftVotes[song.id] || 0
               return (
                 <article className={`song-card voting-song-card ${isViewingOther ? 'is-no-vote' : ''} ${currentVote > 0 ? 'has-votes' : ''}`} key={song.id}>
-                  <div className="song-card-main">
-                    <div>
-                      <h2>{song.title}</h2>
-                      <p>{song.artist}{song.album ? ` · ${song.album}` : ''}</p>
+                  <div className="voting-song-header">
+                    <div className="song-card-main">
+                      <div>
+                        <h2>{song.title}</h2>
+                        <p>{song.artist}{song.album ? ` · ${song.album}` : ''}</p>
+                      </div>
                     </div>
+
+                    <div className="song-actions voting-song-actions">
+                      {song.link && <a href={song.link} target="_blank" rel="noreferrer">{serviceLabelForUrl(song.link)}</a>}
+                      {serviceLabelForUrl(song.link) !== 'Spotify' && <a href={searchUrl('spotify', song)} target="_blank" rel="noreferrer">Spotify</a>}
+                      <a href={searchUrl('tidal', song)} target="_blank" rel="noreferrer">TIDAL</a>
+                      <a href={searchUrl('youtube', song)} target="_blank" rel="noreferrer">YouTube</a>
+                    </div>
+
+                    {song.submitter_note && <p className="note">{song.submitter_note}</p>}
                   </div>
 
-                  <div className="song-actions voting-song-actions">
-                    {song.link && <a href={song.link} target="_blank" rel="noreferrer">{serviceLabelForUrl(song.link)}</a>}
-                    {serviceLabelForUrl(song.link) !== 'Spotify' && <a href={searchUrl('spotify', song)} target="_blank" rel="noreferrer">Spotify</a>}
-                    <a href={searchUrl('tidal', song)} target="_blank" rel="noreferrer">TIDAL</a>
-                    <a href={searchUrl('youtube', song)} target="_blank" rel="noreferrer">YouTube</a>
-                  </div>
-
-                  {song.submitter_note && <p className="note">{song.submitter_note}</p>}
+                  <CommentThread
+                    comments={songComments}
+                    commentLikes={commentLikes}
+                    player={player}
+                    revealAuthors={false}
+                    anonymousLabelFor={anonymousLabelFor}
+                    songId={song.id}
+                    onChanged={onChanged}
+                    roundId={round.id}
+                    compact
+                  />
 
                   {!isViewingOther && (
                     <div className="vote-control vote-column">
@@ -191,20 +205,8 @@ export default function VotingView({
                         onClick={() => isOwn ? setSelfVoteSong(song) : adjustVote(song, -1)}
                         disabled={!isOwn && (draftVotes[song.id] || 0) <= 0}
                       >↓</button>
-                    </div>
+                      </div>
                   )}
-
-                  <CommentThread
-                    comments={songComments}
-                    commentLikes={commentLikes}
-                    player={player}
-                    revealAuthors={false}
-                    anonymousLabelFor={anonymousLabelFor}
-                    songId={song.id}
-                    onChanged={onChanged}
-                    roundId={round.id}
-                    compact
-                  />
                 </article>
               )
             })}

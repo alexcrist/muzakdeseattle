@@ -85,7 +85,7 @@ export default function PlayerListPage() {
 
       {leader ? (
         <Link className="leader-spotlight leader-spotlight-link" to={`/players/${leader.id}`}>
-          <Avatar player={leader} size="xl" />
+          <Avatar player={leader} size="xl" linkToProfile={false} />
           <div>
             <p className="eyebrow">Current leader</p>
             <h2>{leader.name}{leader.id === player.id ? ' (you)' : ''}</h2>
@@ -117,7 +117,7 @@ export default function PlayerListPage() {
                 key={row.id}
               >
                 <span className="rank">{index + 1}</span>
-                <Avatar player={row} />
+                <Avatar player={row} linkToProfile={false} />
                 <span className="leader-name">
                   {row.name}{row.id === player.id ? ' (you)' : ''}
                   <small>{submissionCounts[row.id] || 0} submissions{row.active ? '' : ' · inactive'}</small>
