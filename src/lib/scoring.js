@@ -120,6 +120,22 @@ export function buildSongEntries({ songs = [], votes = [], duplicateGroups = [],
   return entries.sort((a, b) => b.totalPoints - a.totalPoints || a.title.localeCompare(b.title))
 }
 
+// Standard competition ranking: entries on the same score share a place and the next place skips
+// past them, so a two-way tie for first reads 1, 1, 3 rather than inventing an order between them.
+// Expects the descending sort buildSongEntries already applies.
+export function rankEntries(entries = []) {
+  let rank = 0
+  let previousScore = null
+
+  return entries.map((entry, index) => {
+    if (entry.totalPoints !== previousScore) {
+      rank = index + 1
+      previousScore = entry.totalPoints
+    }
+    return { ...entry, rank }
+  })
+}
+
 export function entrySubmitterText(entry) {
   if (!entry?.submitters?.length) return 'Unknown player'
   return entry.submitters.map(playerLabel).join(' + ')

@@ -7,7 +7,7 @@ import { EMPTY_PLAYER_DATA, fetchPlayerData, PLAYER_REALTIME_TABLES } from '../l
 import { groupLabel, sidesForRound } from '../lib/groups.js'
 import { clearProfilePictureUrl, saveProfileName, saveProfilePictureUrl } from '../lib/mutations.js'
 import { uploadProfilePicture } from '../lib/profilePictures.js'
-import { buildLeaderboard, buildSongEntries } from '../lib/scoring.js'
+import { buildLeaderboard, buildSongEntries, rankEntries } from '../lib/scoring.js'
 import { formatPacificDate, getRoundWeekStart, getScoredRoundIds, sortedRounds } from '../lib/schedule.js'
 
 export default function PlayerPage() {
@@ -79,23 +79,24 @@ export default function PlayerPage() {
         })
 
         // A player only ever competed against their own side, so rank within that side.
-        const placeBySide = {}
+        const entriesBySide = {}
+        for (const entry of entries) {
+          const key = entry.side === 0 || entry.side === 1 ? entry.side : 'all'
+          if (!entriesBySide[key]) entriesBySide[key] = []
+          entriesBySide[key].push(entry)
+        }
 
-        return entries
+        return Object.values(entriesBySide)
+          .flatMap(sideEntries => rankEntries(sideEntries))
+          .filter(entry => entry.submitterIds?.includes(viewedPlayer.id))
           .map(entry => {
-            const key = entry.side === 0 || entry.side === 1 ? entry.side : 'all'
-            placeBySide[key] = (placeBySide[key] || 0) + 1
-            return { entry, rank: placeBySide[key] }
-          })
-          .filter(({ entry }) => entry.submitterIds?.includes(viewedPlayer.id))
-          .map(({ entry, rank }) => {
             const submittedSong = entry.songs?.find(song => song.player_id === viewedPlayer.id) || entry.songs?.[0]
             return {
               id: `${round.id}:${entry.id}:${submittedSong?.id || 'song'}`,
               round,
               weekStart: getRoundWeekStart(settings, round, roundIndex),
               entry,
-              rank,
+              rank: entry.rank,
               song: submittedSong,
             }
           })

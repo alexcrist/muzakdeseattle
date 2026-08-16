@@ -227,6 +227,7 @@ export default function HomePage() {
               commentLikes={data.commentLikes}
               duplicateGroups={roundData.roundGroups}
               groupSongs={roundData.roundGroupSongs}
+              playlists={roundData.roundPlaylists}
               sides={sides}
               onChanged={reload}
             />

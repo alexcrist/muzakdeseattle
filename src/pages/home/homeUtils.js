@@ -21,10 +21,6 @@ export function commentsForEntry(comments, entry) {
   return comments.filter(comment => ids.has(comment.song_id))
 }
 
-export function generalComments(comments) {
-  return comments.filter(comment => !comment.song_id)
-}
-
 export function serviceLabelForUrl(url = '') {
   try {
     const host = new URL(url).hostname.replace(/^www\./, '')

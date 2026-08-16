@@ -218,24 +218,3 @@ function GifPicker({ onSelect, onError, compact }) {
     </div>
   )
 }
-
-export function RoundThread({ comments, commentLikes, player, revealAuthors, anonymousLabelFor, roundId, onChanged }) {
-  return (
-    <section className="song-card round-thread-card">
-      <div>
-        <p className="eyebrow">Round thread</p>
-        <h2>General comments</h2>
-      </div>
-      <CommentThread
-        comments={comments}
-        commentLikes={commentLikes}
-        player={player}
-        revealAuthors={revealAuthors}
-        anonymousLabelFor={anonymousLabelFor}
-        songId={null}
-        onChanged={onChanged}
-        roundId={roundId}
-      />
-    </section>
-  )
-}

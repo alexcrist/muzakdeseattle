@@ -5,7 +5,7 @@ import useRealtimeData from '../hooks/useRealtimeData.js'
 import { EMPTY_ROUNDS_DATA, fetchRoundsData, ROUNDS_REALTIME_TABLES } from '../lib/data.js'
 import { groupLabel, sidesForRound } from '../lib/groups.js'
 import { addRound, deleteRound, moveUpcomingRound, updateRoundTheme } from '../lib/mutations.js'
-import { buildSongEntries, entrySubmitterText } from '../lib/scoring.js'
+import { buildSongEntries, entrySubmitterText, rankEntries } from '../lib/scoring.js'
 import { formatPacificDate, getLeagueContext, getRoundState, getRoundTiming, PHASES } from '../lib/schedule.js'
 
 export default function RoundsPage() {
@@ -330,7 +330,7 @@ function HistoryRound({ row, songs, votes, groups, groupSongs, roundGroups }) {
     groupSongs: groupSongs.filter(item => groupIds.has(item.group_id)),
     sideByPlayerId: sides.isSplit ? sides.sideByPlayerId : null,
   })
-  const top = entries.slice(0, 4)
+  const top = rankEntries(entries).slice(0, 4)
 
   return (
     <details className="history-round">
@@ -344,9 +344,9 @@ function HistoryRound({ row, songs, votes, groups, groupSongs, roundGroups }) {
       <div className="history-list">
         {top.length === 0 ? (
           <p className="muted">No songs were submitted.</p>
-        ) : top.map((entry, index) => (
+        ) : top.map(entry => (
           <div className="history-row" key={entry.id}>
-            <span className="song-number">{index + 1}</span>
+            <span className="song-number">{entry.rank}</span>
             <div>
               <strong>{entry.title}</strong>
               <p>

@@ -1,13 +1,12 @@
 import { useMemo } from 'react'
 import Avatar from '../../components/Avatar.jsx'
 import { groupLabel } from '../../lib/groups.js'
-import { listeningOrderFor } from '../../lib/listeningOrder.js'
-import { buildSongEntries, entrySubmitterText } from '../../lib/scoring.js'
-import CommentThread, { RoundThread } from './CommentThread.jsx'
-import { commentsForEntry, generalComments, playerName } from './homeUtils.js'
-import ListeningOrderPanel from './ListeningOrderPanel.jsx'
+import { buildSongEntries, rankEntries } from '../../lib/scoring.js'
+import CommentThread from './CommentThread.jsx'
+import { commentsForEntry, playerName } from './homeUtils.js'
+import PlaylistPanel from './PlaylistPanel.jsx'
 
-export default function AppreciationView({ round, player, songs, votes, comments, commentLikes, duplicateGroups, groupSongs, sides, onChanged }) {
+export default function AppreciationView({ round, player, songs, votes, comments, commentLikes, duplicateGroups, groupSongs, playlists = [], sides, onChanged }) {
   const entries = useMemo(() => buildSongEntries({
     songs,
     votes,
@@ -15,47 +14,11 @@ export default function AppreciationView({ round, player, songs, votes, comments
     groupSongs,
     sideByPlayerId: sides?.isSplit ? sides.sideByPlayerId : null,
   }), [songs, votes, duplicateGroups, groupSongs, sides])
-  const listeningEntries = useMemo(() => (
-    listeningOrderFor(entries, {
-      roundId: round.id,
-      playerId: player.id,
-      getId: entry => entry.canonical_song_id || entry.id,
-    })
-  ), [entries, round.id, player.id])
 
-  // Both sides are ranked together, so the round winner is whichever song topped either side.
-  const topScore = entries[0]?.totalPoints || 0
-  const winners = entries.filter(entry => entry.totalPoints === topScore && topScore > 0)
+  const rankedEntries = useMemo(() => rankEntries(entries), [entries])
 
   return (
     <section className="song-stack">
-      {winners.length > 0 && (
-        <section className="winner-panel">
-          <span className="eyebrow">{winners.length > 1 ? `Round winners (${winners.length}-way tie)` : 'Round winner'}</span>
-          {winners.map(winner => (
-            <div className="winner-entry" key={winner.id}>
-              <h2>{winner.title}</h2>
-              <p>
-                {winner.artist} by {entrySubmitterText(winner)}
-                {winner.side !== null && winner.side !== undefined ? ` · ${groupLabel(winner.side)}` : ''}
-              </p>
-            </div>
-          ))}
-          <strong>{topScore} pts</strong>
-        </section>
-      )}
-
-      <RevealCeremony entries={entries} comments={comments} sides={sides} />
-
-      <RoundThread
-        comments={generalComments(comments)}
-        commentLikes={commentLikes}
-        player={player}
-        revealAuthors
-        onChanged={onChanged}
-        roundId={round.id}
-      />
-
       {entries.length === 0 ? (
         <div className="empty-state">
           <h2>No songs to reveal</h2>
@@ -63,12 +26,15 @@ export default function AppreciationView({ round, player, songs, votes, comments
         </div>
       ) : (
         <>
-          <ListeningOrderPanel items={listeningEntries} />
-          {entries.map((entry, index) => (
-            <article className={`song-card revealed ${index === 0 ? 'top-entry' : ''}`} key={entry.id}>
+          <PlaylistPanel playlists={playlists} showSides={Boolean(sides?.isSplit)} />
+
+          <p className="eyebrow">Final ranking</p>
+
+          {rankedEntries.map(entry => (
+            <article className={`song-card revealed ${entry.rank === 1 && entry.totalPoints > 0 ? 'top-entry' : ''}`} key={entry.id}>
               <div className="results-row">
                 <div className="song-card-main">
-                  <span className="song-number">{index + 1}</span>
+                  <span className="song-number">{entry.rank}</span>
                   <div>
                     <div className="section-heading compact">
                       <h2>{entry.title}</h2>
@@ -114,24 +80,6 @@ export default function AppreciationView({ round, player, songs, votes, comments
           ))}
         </>
       )}
-    </section>
-  )
-}
-
-function RevealCeremony({ entries, comments, sides }) {
-  const sideCounts = [0, 1].map(side => entries.filter(entry => entry.side === side).length)
-
-  return (
-    <section className="reveal-ceremony">
-      <span className="phase-pill phase-appreciation">Masks off</span>
-      <div>
-        <h2>The round is revealed</h2>
-        <p>
-          {sides?.isSplit
-            ? `${groupLabel(0)} ${sideCounts[0]} songs · ${groupLabel(1)} ${sideCounts[1]} songs · ranked together`
-            : `${entries.length} songs · ${comments.length} comments · no more mystery names`}
-        </p>
-      </div>
     </section>
   )
 }
