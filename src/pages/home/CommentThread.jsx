@@ -145,7 +145,9 @@ export default function CommentThread({ comments, commentLikes = [], commentLike
       )}
 
       <form className="comment-form" onSubmit={postComment}>
-        <input
+        <textarea
+          rows={2}
+          aria-label={revealAuthors ? 'Comment' : 'Anonymous comment'}
           value={body}
           onChange={event => setBody(event.target.value)}
           placeholder={revealAuthors ? 'Add comment...' : 'Leave an anonymous comment...'}

@@ -1375,6 +1375,8 @@ select:focus {
 .comment p {
   color: var(--ink);
   font-size: 0.93rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .comment-gif {
@@ -1487,7 +1489,7 @@ select:focus {
   gap: 0.4rem;
 }
 
-.comment-form input,
+.comment-form textarea,
 .gif-search-form input {
   min-width: 0;
   min-height: 2rem;
@@ -1495,6 +1497,10 @@ select:focus {
   background: transparent;
   padding: 0.35rem 0.5rem;
   font-size: 0.82rem;
+}
+
+.comment-form {
+  align-items: flex-start;
 }
 
 .comment-form .btn,
@@ -1806,7 +1812,7 @@ select:focus {
   padding-top: 0;
 }
 
-.appreciation-song-card .comment-form input {
+.appreciation-song-card .comment-form textarea {
   background: var(--surface);
 }
 
