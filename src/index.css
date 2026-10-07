@@ -837,12 +837,6 @@ select:focus {
   background: #fffafd;
 }
 
-.song-card.has-votes {
-  border-color: var(--mint);
-  background: linear-gradient(135deg, #fff, var(--mint-soft));
-  box-shadow: 5px 5px 0 rgba(68, 214, 158, 0.28), var(--shadow);
-}
-
 .song-card-main {
   display: flex;
   flex: 1 1 auto;
@@ -874,6 +868,12 @@ select:focus {
   flex-wrap: wrap;
   gap: 0.65rem;
   margin-top: 0.35rem;
+}
+
+.note,
+.submission-receipt-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .note,

@@ -18,14 +18,29 @@ export default function SubmissionView({ round, player, songs, activePlayers, si
   const [form, setForm] = useState(() => songFormValues(mySong))
   const [savedSong, setSavedSong] = useState(() => mySong ? songFormValues(mySong) : null)
   const [editing, setEditing] = useState(() => !mySong)
+  const [detailsVisible, setDetailsVisible] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
+    setDetailsVisible(false)
+  }, [round.id, player.id])
+
+  useEffect(() => {
+    function hideDetailsWhenAway() {
+      if (document.visibilityState === 'hidden') setDetailsVisible(false)
+    }
+
+    document.addEventListener('visibilitychange', hideDetailsWhenAway)
+    return () => document.removeEventListener('visibilitychange', hideDetailsWhenAway)
+  }, [])
+
+  useEffect(() => {
     if (!mySong) return
     const nextSong = songFormValues(mySong)
     setSavedSong(nextSong)
+    setDetailsVisible(false)
     if (!editing) setForm(nextSong)
   }, [mySong?.id, mySong?.artist, mySong?.title, mySong?.album, mySong?.link, mySong?.submitter_note])
 
@@ -78,6 +93,7 @@ export default function SubmissionView({ round, player, songs, activePlayers, si
   }
 
   function startEditing() {
+    setDetailsVisible(false)
     setForm(savedSong || songFormValues(mySong))
     setError('')
     setSuccess('')
@@ -157,25 +173,38 @@ export default function SubmissionView({ round, player, songs, activePlayers, si
               </p>
             )}
 
-            <div className="submission-receipt">
-              <div className="submission-record" aria-hidden="true"><span /></div>
-              <div className="submission-receipt-copy">
-                <p className="eyebrow">Your pick</p>
-                <h3>{savedSong.title}</h3>
-                <p className="submission-receipt-meta">
-                  <strong>{savedSong.artist}</strong>
-                  {savedSong.album && <span> · {savedSong.album}</span>}
-                </p>
-                {savedSong.link && (
-                  <a href={savedSong.link} target="_blank" rel="noreferrer" className="submission-receipt-link">
-                    Open submitted link ↗
-                  </a>
-                )}
-              </div>
-            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              aria-expanded={detailsVisible}
+              onClick={() => setDetailsVisible(visible => !visible)}
+            >
+              {detailsVisible ? 'Hide my song' : 'Show my song'}
+            </button>
 
-            {savedSong.submitter_note && (
-              <p className="submission-receipt-note">“{savedSong.submitter_note}”</p>
+            {detailsVisible && (
+              <>
+                <div className="submission-receipt">
+                  <div className="submission-record" aria-hidden="true"><span /></div>
+                  <div className="submission-receipt-copy">
+                    <p className="eyebrow">Your pick</p>
+                    <h3>{savedSong.title}</h3>
+                    <p className="submission-receipt-meta">
+                      <strong>{savedSong.artist}</strong>
+                      {savedSong.album && <span> · {savedSong.album}</span>}
+                    </p>
+                    {savedSong.link && (
+                      <a href={savedSong.link} target="_blank" rel="noreferrer" className="submission-receipt-link">
+                        Open submitted link ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {savedSong.submitter_note && (
+                  <p className="submission-receipt-note">“{savedSong.submitter_note}”</p>
+                )}
+              </>
             )}
 
             <div className="submission-saved-footer">

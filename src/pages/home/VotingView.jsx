@@ -185,7 +185,7 @@ export default function VotingView({
               const currentVote = draftVotes[song.id] || 0
               const linkedService = serviceLabelForUrl(song.link)
               return (
-                <article className={`song-card voting-song-card ${isViewingOther ? 'is-no-vote' : ''} ${currentVote > 0 ? 'has-votes' : ''}`} key={song.id}>
+                <article className={`song-card voting-song-card ${isViewingOther ? 'is-no-vote' : ''}`} key={song.id}>
                   <div className="voting-song-header">
                     <div className="song-card-main">
                       <div>
