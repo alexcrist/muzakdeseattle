@@ -191,7 +191,10 @@ output is constrained to candidate IDs and checked before use. User-entered
 fields are treated as data, not instructions. Catalog results are not stored;
 only the chosen recording and a short explanation are saved for the round.
 
-Songs are processed concurrently, four at a time per service. Services run
+Spotify processes four songs at a time. Tidal processes at most two, with
+catalog requests serialized and a 750 ms gap after each request completes.
+Tidal retry waits hold the same queue; if rate-limit retries are exhausted,
+remaining catalog searches stop for that job. Services run
 independently, so a Spotify error does not prevent Tidal from finishing. Worker
 wall time is bounded for Supabase Free's 150-second limit. Rate-limit responses
 are retried within that budget; remaining failures appear in Admin for a manual

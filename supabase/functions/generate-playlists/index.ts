@@ -73,7 +73,7 @@ async function runJob(db, job) {
     await updateJob({ total_songs: pendingSongs.length, matched_songs: 0, message: `Finding the submitted recordings on ${serviceName}.` })
     const music = service === 'tidal' ? tidalClient(db, deadline) : spotifyClient(db, deadline)
     const cached = new Map(previousMatches.map(match => [match.song_id, match]))
-    const matches = await mapConcurrent(pendingSongs, config.concurrency, async song => {
+    const matches = await mapConcurrent(pendingSongs, service === 'tidal' ? Math.min(config.concurrency, 2) : config.concurrency, async song => {
       const fingerprint = await songFingerprint(song, config.model, config.candidate_count)
       const previous = cached.get(song.id)
       if (previous?.fingerprint === fingerprint && previous.status === 'matched' && previous.track_id) return previous

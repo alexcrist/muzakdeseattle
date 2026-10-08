@@ -45,7 +45,11 @@ export async function jsonRequest(label, url, options = {}, deadline = Date.now(
       await response.body?.cancel()
     }
 
-    if (response.status === 429) throw new JobError(`${label} reached its rate limit. Wait a few minutes, then retry from Admin.`)
+    if (response.status === 429) {
+      const error = new JobError(`${label} reached its rate limit. Wait a few minutes, then retry from Admin.`)
+      error.status = 429
+      throw error
+    }
     if (response.status === 401 || response.status === 403) throw new JobError(`${label} denied access. Check the API key or reconnect Tidal with playlist permissions.`)
     throw new JobError(`${label} returned HTTP ${response.status}. Retry from Admin; if it persists, check the integration setup.`)
   }

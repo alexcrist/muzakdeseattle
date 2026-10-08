@@ -6,6 +6,11 @@ const COUNTRY = 'US'
 
 export function tidalClient(db, deadline) {
   let catalogTokenPromise
+  // Catalog calls share one queue, including retry waits. Matching can still
+  // overlap Gemini calls without sending bursts to Tidal.
+  let catalogQueue = Promise.resolve()
+  let nextCatalogRequestAt = 0
+  let catalogRateLimited = false
   let userTokenPromise
   const clientId = requiredEnv('TIDAL_CLIENT_ID')
 
@@ -46,7 +51,7 @@ export function tidalClient(db, deadline) {
     const token = catalog
       ? await (catalogTokenPromise ||= catalogToken())
       : await (userTokenPromise ||= userToken())
-    return jsonRequest('Tidal', url, {
+    const send = () => jsonRequest('Tidal', url, {
       method,
       headers: {
         Authorization: `Bearer ${token}`, Accept: 'application/vnd.api+json',
@@ -55,6 +60,27 @@ export function tidalClient(db, deadline) {
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     }, until)
+    if (!catalog) return send()
+    const pending = catalogQueue.then(async () => {
+      if (catalogRateLimited) throw new JobError('Tidal search is paused after a rate limit. This song was omitted; existing playlists are not updated on retry.')
+      const delay = Math.max(0, nextCatalogRequestAt - Date.now())
+      if (Date.now() + delay + 1500 >= until) throw new JobError('Tidal search ran out of time. This song was omitted; existing playlists are not updated on retry.')
+      if (delay) await new Promise(resolve => setTimeout(resolve, delay))
+      try {
+        return await send()
+      } catch (error) {
+        if (error.status === 429) {
+          catalogRateLimited = true
+          throw new JobError('Tidal reached its rate limit. This song was omitted; add it directly in Tidal after the limit clears. Existing playlists are not updated on retry.')
+        }
+        throw error
+      } finally {
+        // Leave a gap after completion as well as keeping requests sequential.
+        nextCatalogRequestAt = Date.now() + 750
+      }
+    })
+    catalogQueue = pending.then(() => undefined, () => undefined)
+    return pending
   }
 
   async function search(song, count, until) {
