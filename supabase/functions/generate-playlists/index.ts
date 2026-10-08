@@ -104,7 +104,7 @@ async function runJob(db, job) {
       const ordered = listeningOrderFor(sideSongs, { roundId: job.round_id, playerId: `playlist-side-${groupIndex}` })
       const trackIds = [...new Set(ordered.map(song => bySong.get(song.id)?.track_id).filter(Boolean))]
       const sideName = sides.isSplit ? ` — Side ${groupIndex === 0 ? 'A' : 'B'}` : ''
-      const name = `${settings.league_name} — ${settings.season_label} — Round ${context.currentRoundIndex + 1}: ${context.currentRound.theme_name}${sideName}`.slice(0, 250)
+      const name = `Muzak ⋅ ${context.currentRound.theme_name}${sides.isSplit ? ` ⋅ Side ${groupIndex === 0 ? 'A' : 'B'}` : ''}`.slice(0, 250)
       const description = `${settings.season_label}, week of ${context.currentWeekStart}${sideName}. ${context.currentRound.theme_name}. Submitted songs; submitters stay anonymous.`.slice(0, 250)
       // Only visible round links decide whether a playlist exists. A fresh job
       // gets a fresh creation key, so removing a link permits recreation.
