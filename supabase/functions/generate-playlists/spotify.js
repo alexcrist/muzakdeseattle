@@ -70,8 +70,6 @@ export function spotifyClient(db, deadline) {
       method: 'POST', attempts: 1,
       body: {
         name: playlist.create_payload.name,
-        // Live API diagnosis: adding a newline changes creation from 201 to 400.
-        description: playlist.create_payload.description.replace(/[\r\n]+/g, ' ').slice(0, 250),
         public: true,
       },
     })
