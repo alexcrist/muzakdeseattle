@@ -93,8 +93,6 @@ export default function AdminPage() {
         <AdminUnlock onUnlock={() => setAdminUnlocked(true)} />
       ) : (
         <>
-          <PlaylistAutomation settings={settings} rounds={data.rounds} />
-
           <section className="card admin-settings">
             <div className="section-heading">
               <h2>League settings</h2>
@@ -142,6 +140,8 @@ export default function AdminPage() {
               <button type="submit" className="btn btn-primary">Save settings</button>
             </form>
           </section>
+
+          <PlaylistAutomation settings={settings} rounds={data.rounds} />
 
           <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={reload} />
 
