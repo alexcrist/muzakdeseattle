@@ -11,8 +11,23 @@ export function requiredEnv(name) {
   return value
 }
 
-export async function jsonRequest(label, url, options = {}, deadline = Date.now() + 25000, attempts = 3) {
+// Database reservations share each provider's budget across worker invocations,
+// particularly the Gemini calls made by simultaneous Spotify and Tidal jobs.
+export function rateLimitedRequest(db, provider) {
+  return (label, url, options, deadline, attempts = 3) => jsonRequest(label, url, options, deadline, attempts, async until => {
+    const budget = until - Date.now() - 1500
+    if (budget <= 0) throw new JobError(`${label} ran out of time waiting for its request slot.`)
+    const delay = await checked(db.rpc('playlist_reserve_request', {
+      p_provider: provider, p_budget_ms: Math.floor(budget),
+    }), 'Could not reserve a provider request slot.')
+    if (delay === null) throw new JobError(`${label} ran out of time waiting for its request slot.`)
+    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
+  })
+}
+
+export async function jsonRequest(label, url, options = {}, deadline = Date.now() + 25000, attempts = 3, beforeAttempt = async () => {}) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await beforeAttempt(deadline)
     const remaining = deadline - Date.now()
     if (remaining < 1500) throw new JobError(`${label} ran out of time. Retry from Admin to continue.`)
     let response

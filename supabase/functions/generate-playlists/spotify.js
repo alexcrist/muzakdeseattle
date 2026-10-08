@@ -1,8 +1,9 @@
-import { checked, JobError, jsonRequest, requiredEnv } from './http.js'
+import { checked, JobError, rateLimitedRequest, requiredEnv } from './http.js'
 
 const API = 'https://api.spotify.com/v1'
 
 export function spotifyClient(db, deadline) {
+  const jsonRequest = rateLimitedRequest(db, 'spotify')
   let tokenPromise
   let ownerPromise
 

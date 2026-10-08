@@ -81,7 +81,7 @@ async function runJob(db, job) {
       try {
         const candidates = await music.search(song, config.candidate_count, matchingDeadline)
         const { track, reason } = await chooseTrack(song, candidates, {
-          model: config.model, round: context.currentRound, serviceName, deadline: matchingDeadline,
+          db, model: config.model, round: context.currentRound, serviceName, deadline: matchingDeadline,
         })
         match = {
           status: track ? 'matched' : 'unmatched', track_id: track?.id || null,

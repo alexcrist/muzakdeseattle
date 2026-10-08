@@ -128,7 +128,9 @@ and `groups.js`; it never advances phases or rebalances existing sides.
 Each split round gets separate public Side A and Side B playlists on Tidal and
 Spotify. Search uses title and artist, and Gemini selects from the top five
 candidates with four concurrent songs on Spotify and at most two on Tidal.
-Tidal catalog calls are serialized with a 750 ms gap and shared retry waits. Successful matches survive
+Tidal catalog calls are serialized with shared retry waits. Every Tidal, Spotify,
+and Gemini request (including retries) reserves a database-backed slot, at most
+one request per second per provider across jobs. Successful matches survive
 manual retries. Both scheduled and manual jobs create only missing playlists;
 existing managed or manually linked playlists are left untouched. Songs without
 matches are omitted; create the playlist with whatever matches succeeded. Admin has per-service job buttons, progress, links, and unresolved

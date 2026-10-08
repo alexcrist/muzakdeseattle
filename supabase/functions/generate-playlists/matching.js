@@ -1,12 +1,13 @@
-import { digest, JobError, jsonRequest, requiredEnv } from './http.js'
+import { digest, JobError, rateLimitedRequest, requiredEnv } from './http.js'
 
 export function songFingerprint(song, model, candidateCount) {
   return digest(JSON.stringify([song.title, song.artist, song.album || '', song.link || '', song.submitter_note || '', model, candidateCount]))
 }
 
-export async function chooseTrack(song, candidates, { model, round, serviceName, deadline }) {
+export async function chooseTrack(song, candidates, { db, model, round, serviceName, deadline }) {
   if (!candidates.length) return { track: null, reason: `${serviceName} returned no tracks for this song and artist.` }
-  const response = await jsonRequest('Gemini matching',
+  const request = rateLimitedRequest(db, 'gemini')
+  const response = await request('Gemini matching',
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': requiredEnv('GEMINI_API_KEY') },

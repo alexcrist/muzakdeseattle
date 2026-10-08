@@ -192,7 +192,10 @@ fields are treated as data, not instructions. Catalog results are not stored;
 only the chosen recording and a short explanation are saved for the round.
 
 Spotify processes four songs at a time. Tidal processes at most two, with
-catalog requests serialized and a 750 ms gap after each request completes.
+catalog requests serialized. Tidal, Spotify, and Gemini each have a separate
+one-request-per-second limit, shared across jobs through database reservations.
+Every HTTP attempt, including retries and playlist writes, reserves a slot;
+Gemini shares its limit across both services.
 Tidal retry waits hold the same queue; if rate-limit retries are exhausted,
 remaining catalog searches stop for that job. Services run
 independently, so a Spotify error does not prevent Tidal from finishing. Worker
