@@ -99,7 +99,8 @@ export function tidalClient(db, deadline) {
     return rows
   }
 
-  async function syncPlaylist(playlist, trackIds, runId) {
+  async function createPlaylist(playlist, trackIds, runId) {
+    if (playlist.playlist_id) return { skipped: true }
     let playlistId = playlist.playlist_id
     if (!playlistId) {
       // The payload and key are saved before the request, so a crash between
@@ -114,27 +115,10 @@ export function tidalClient(db, deadline) {
     }
 
     const path = `/playlists/${encodeURIComponent(playlistId)}`
-    const visibility = { data: { type: 'playlists', id: playlistId, attributes: { accessType: 'PUBLIC' } } }
-    await request(path, { method: 'PATCH', body: visibility, key: `public-${playlist.create_key}-${runId}` })
-
-    const existing = await items(playlistId)
-    const desired = new Set(trackIds)
-    const kept = new Set()
-    const remove = existing.filter(item => {
-      if (item.type !== 'tracks' || !desired.has(item.id) || kept.has(item.id)) return true
-      kept.add(item.id)
-      return false
-    })
-    // Only playlists created by this integration reach this method. Updating
-    // them reconciles corrected matches without changing songs or vote rows.
-    for (let offset = 0; offset < remove.length; offset += 50) {
-      const data = remove.slice(offset, offset + 50).map(item => {
-        if (!item.meta?.itemId) throw new JobError('Tidal did not supply the item IDs needed to update this playlist.')
-        return { type: item.type, id: item.id, meta: { itemId: item.meta.itemId } }
-      })
-      await request(`${path}/relationships/items`, { method: 'DELETE', body: { data }, key: `remove-${await digest(JSON.stringify([playlistId, runId, data]))}` })
-    }
-    const missing = trackIds.filter(id => !kept.has(id))
+    // An idempotent create may recover an earlier response. Never alter a
+    // recovered playlist that already contains tracks.
+    if ((await items(playlistId)).length) return { skipped: true }
+    const missing = trackIds
     for (let offset = 0; offset < missing.length; offset += 50) {
       const data = missing.slice(offset, offset + 50).map(id => ({ type: 'tracks', id }))
       await request(`${path}/relationships/items`, {
@@ -144,11 +128,11 @@ export function tidalClient(db, deadline) {
     }
 
     const [published, finalItems] = await Promise.all([request(path), items(playlistId)])
-    if (published?.data?.attributes?.accessType !== 'PUBLIC') throw new JobError('Tidal did not make the playlist public. Retry from Admin.')
+    if (published?.data?.attributes?.accessType !== 'PUBLIC') throw new JobError('Tidal did not make the playlist public. Review it directly in Tidal; retries leave existing playlists untouched.')
     const finalIds = new Set(finalItems.filter(item => item.type === 'tracks').map(item => item.id))
     if (trackIds.some(id => !finalIds.has(id))) throw new JobError('Tidal could not add every matched track. Some recordings may be unavailable in the US.')
     return { id: playlistId, url: `https://tidal.com/playlist/${encodeURIComponent(playlistId)}` }
   }
 
-  return { search, syncPlaylist }
+  return { search, createPlaylist }
 }

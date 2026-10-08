@@ -18,7 +18,7 @@ async function runJob(db, job) {
     .eq('service', service).eq('round_id', job.round_id).eq('run_id', job.run_id))
 
   try {
-    const [settings, rounds, config, players, groupRows, songs, previousMatches, previousPlaylists] = await Promise.all([
+    const [settings, rounds, config, players, groupRows, songs, previousMatches, previousPlaylists, linkedPlaylists] = await Promise.all([
       checked(db.from('league_settings').select('*').eq('id', 1).single()),
       checked(db.from('rounds').select('*').order('queue_position')),
       checked(db.from('playlist_automation_settings').select('*').eq('service', service).single()),
@@ -27,6 +27,7 @@ async function runJob(db, job) {
       checked(db.from('songs').select('id, round_id, player_id, title, artist, album, link, submitter_note').eq('round_id', job.round_id)),
       checked(db.from('playlist_song_matches').select('*').eq('service', service).eq('round_id', job.round_id)),
       checked(db.from('playlist_managed_playlists').select('*').eq('service', service).eq('round_id', job.round_id)),
+      checked(db.from('round_playlists').select('group_index, service, url').eq('round_id', job.round_id)),
     ])
     if (!config.enabled || !config.connected) throw new JobError(`${serviceName} automation is not connected and enabled.`)
     const context = getLeagueContext(rounds, settings)
@@ -57,10 +58,22 @@ async function runJob(db, job) {
       }
     }
 
-    await updateJob({ total_songs: songs.length, matched_songs: 0, message: `Finding the submitted recordings on ${serviceName}.` })
+    const sideIndexes = sides.isSplit ? [0, 1] : [0]
+    const isServiceLink = row => {
+      if (row.service?.trim().toLowerCase() === service) return true
+      try {
+        const hostname = new URL(row.url).hostname.toLowerCase()
+        return hostname === `${service}.com` || hostname.endsWith(`.${service}.com`)
+      } catch { return false }
+    }
+    const existingSides = new Set(sideIndexes.filter(groupIndex =>
+      previousPlaylists.some(row => row.group_index === groupIndex && row.playlist_id)
+      || linkedPlaylists.some(row => (row.group_index ?? 0) === groupIndex && isServiceLink(row))))
+    const pendingSongs = songs.filter(song => !existingSides.has(sides.isSplit ? sides.sideByPlayerId[song.player_id] : 0))
+    await updateJob({ total_songs: pendingSongs.length, matched_songs: 0, message: `Finding the submitted recordings on ${serviceName}.` })
     const music = service === 'tidal' ? tidalClient(db, deadline) : spotifyClient(db, deadline)
     const cached = new Map(previousMatches.map(match => [match.song_id, match]))
-    const matches = await mapConcurrent(songs, config.concurrency, async song => {
+    const matches = await mapConcurrent(pendingSongs, config.concurrency, async song => {
       const fingerprint = await songFingerprint(song, config.model, config.candidate_count)
       const previous = cached.get(song.id)
       if (previous?.fingerprint === fingerprint && previous.status === 'matched' && previous.track_id) return previous
@@ -86,9 +99,13 @@ async function runJob(db, job) {
     const bySong = new Map(matches.map(match => [match.song_id, match]))
     const matched = matches.filter(match => match.status === 'matched').length
     await updateJob({ matched_songs: matched, message: 'Assembling public playlists.' })
-    const sideIndexes = sides.isSplit ? [0, 1] : [0]
     const outcomes = await Promise.allSettled(sideIndexes.map(async groupIndex => {
+      if (existingSides.has(groupIndex)) return { skipped: true }
       const sideSongs = songs.filter(song => !sides.isSplit || sides.sideByPlayerId[song.player_id] === groupIndex)
+      if (!sideSongs.length) throw new JobError('No songs were submitted for this side; no playlist was created.')
+      if (sideSongs.some(song => bySong.get(song.id)?.status !== 'matched')) {
+        throw new JobError('A missing playlist needs more song matches. Review the unmatched songs, then retry.')
+      }
       const ordered = listeningOrderFor(sideSongs, { roundId: job.round_id, playerId: `playlist-side-${groupIndex}` })
       const trackIds = [...new Set(ordered.map(song => bySong.get(song.id)?.track_id).filter(Boolean))]
       let playlist = previousPlaylists.find(row => row.group_index === groupIndex)
@@ -103,7 +120,8 @@ async function runJob(db, job) {
             : { name, description, public: true, collaborative: false },
         }).select('*').single())
       }
-      const published = await music.syncPlaylist(playlist, trackIds, job.run_id)
+      const published = await music.createPlaylist(playlist, trackIds, job.run_id)
+      if (published.skipped) return published
       // Home and archive already subscribe to this table and show each side's links.
       await checked(db.from('round_playlists').upsert({
         round_id: job.round_id, group_index: groupIndex, service: serviceName, url: published.url,
@@ -114,11 +132,12 @@ async function runJob(db, job) {
       return published
     }))
     const errors = outcomes.filter(result => result.status === 'rejected').map(result => safeError(result.reason))
-    const publishedCount = outcomes.filter(result => result.status === 'fulfilled').length
-    const completed = matched === songs.length && errors.length === 0
+    const publishedCount = outcomes.filter(result => result.status === 'fulfilled' && !result.value.skipped).length
+    const skippedCount = outcomes.filter(result => result.status === 'fulfilled' && result.value.skipped).length
+    const completed = matched === pendingSongs.length && errors.length === 0
     await updateJob({
       status: completed ? 'completed' : 'partial', finished_at: new Date().toISOString(),
-      message: `${publishedCount} public playlist${publishedCount === 1 ? '' : 's'} synced. ${matched}/${songs.length} submissions matched.${errors.length ? ` ${errors.join(' ')}` : matched < songs.length ? ' Review the songs needing attention, then retry.' : ''}`,
+      message: `${publishedCount} public playlist(s) created. ${skippedCount} existing playlist(s) left untouched. ${matched}/${pendingSongs.length} submissions matched for missing playlists.${errors.length ? ` ${errors.join(' ')}` : ''}`,
     })
   } catch (error) {
     try {

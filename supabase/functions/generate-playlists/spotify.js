@@ -61,7 +61,8 @@ export function spotifyClient(db, deadline) {
     return rows
   }
 
-  async function syncPlaylist(playlist, trackIds) {
+  async function createPlaylist(playlist, trackIds) {
+    if (playlist.playlist_id) return { skipped: true }
     let playlistId = playlist.playlist_id
     if (!playlistId) {
       const owner = await (ownerPromise ||= request('/me'))
@@ -80,22 +81,20 @@ export function spotifyClient(db, deadline) {
         playlist_id: playlistId, url: `https://open.spotify.com/playlist/${encodeURIComponent(playlistId)}`,
         updated_at: new Date().toISOString(),
       }).eq('service', 'spotify').eq('round_id', playlist.round_id).eq('group_index', playlist.group_index))
+      if (recovered) return { skipped: true }
     }
     const path = `/playlists/${encodeURIComponent(playlistId)}`
-    await request(path, { method: 'PUT', body: { public: true, collaborative: false } })
     const uris = trackIds.map(id => `spotify:track:${id}`)
-    // Replacing the generated playlist makes retries and corrected matches
-    // converge to the same contents and order, including after a partial write.
-    await request(`${path}/items`, { method: 'PUT', body: { uris: uris.slice(0, 100) } })
-    for (let offset = 100; offset < uris.length; offset += 100) {
+    // Populate only the playlist created in this invocation; never replace items.
+    for (let offset = 0; offset < uris.length; offset += 100) {
       await request(`${path}/items`, { method: 'POST', body: { uris: uris.slice(offset, offset + 100) }, attempts: 1 })
     }
     const [published, items] = await Promise.all([request(path), collect(`${path}/items?limit=50&market=US`)])
-    if (published.public !== true) throw new JobError('Spotify did not publish the playlist. Retry from Admin.')
+    if (published.public !== true) throw new JobError('Spotify did not publish the playlist. Review it directly in Spotify; retries leave existing playlists untouched.')
     const actual = new Set(items.map(row => row.item || row.track).filter(Boolean).flatMap(track => [track.id, track.linked_from?.id].filter(Boolean)))
     if (trackIds.some(id => !actual.has(id))) throw new JobError('Spotify did not add every matched track. Some recordings may be unavailable.')
     return { id: playlistId, url: `https://open.spotify.com/playlist/${encodeURIComponent(playlistId)}` }
   }
 
-  return { search, syncPlaylist }
+  return { search, createPlaylist }
 }

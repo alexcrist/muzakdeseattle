@@ -178,7 +178,7 @@ GEMINI_API_KEY=...
 
 ### Admin and matching behavior
 
-Unlock **Admin → Listening playlists**, then use **Create** or **Sync** for the
+Unlock **Admin → Listening playlists**, then use **Create** or **Create missing playlists** for the
 desired service. The button is available during the current round's voting and
 appreciation phases. The job continues if you close the page. Status and results
 update through Supabase Realtime, with a Refresh status button as a fallback.
@@ -198,8 +198,9 @@ are retried within that budget; remaining failures appear in Admin for a manual
 retry. There is no recurring retry cron.
 
 Successful matches are reused when the submission and matching configuration
-have not changed. Unmatched or failed songs are retried. A partial playlist may
-be published with the successfully matched songs; Admin lists what is missing.
+have not changed. Unmatched or failed songs on missing sides are retried. A new
+playlist is created only after every song on its side is matched; Admin lists
+what needs attention.
 The generated playlist order is stable and shared within each side; it cannot
 represent every player's individual in-app listening order. Identical selected
 tracks appear once per playlist. Song rows, duplicate merges, and votes are
@@ -208,10 +209,12 @@ never modified by playlist generation.
 Jobs are locked per service and round. Public admin callers can request only the
 current round, wait five minutes between attempts, and make at most eight
 attempts per service per Pacific day. The worker alone writes job state and
-matches. It reuses saved playlist IDs, Tidal idempotency keys, and a Spotify
-creation marker to recover interrupted creation. Syncing reconciles the
-contents of **automation-created playlists**, so make manual additions in a
-copy if you want to preserve them. Manually pasted playlist links are untouched.
+matches. Both scheduled and manual jobs skip existing playlists per service
+and side, including manually linked playlists. Their contents, names, and
+visibility are never changed. Only missing playlists are created. Tidal
+idempotency keys and a Spotify creation marker avoid duplicate creation after
+an interrupted response. If track insertion fails after creation, repair that
+playlist directly in the music service; retries leave it untouched.
 
 The configuration is in `playlist_automation_settings`, writable only by the
 backend/operator. `candidate_count` accepts 1–10; `concurrency` accepts 1–8.

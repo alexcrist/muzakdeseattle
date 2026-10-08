@@ -53,7 +53,7 @@ export default function PlaylistAutomation({ settings, rounds }) {
           ))}
         </div>
       )}
-      <p className="muted">Jobs run in the cloud. You can close this page. Retrying reuses successful matches and updates the same playlists.</p>
+      <p className="muted">Jobs run in the cloud. You can close this page. Existing playlists are left untouched. Retrying creates only missing playlists.</p>
     </section>
   )
 }
@@ -99,7 +99,7 @@ function ServicePlaylists({ service, connection, job, matches, playlists, canRun
       {!ready && <p className="muted">{!connection?.enabled ? 'API keys need to be configured.' : 'The playlist owner needs to connect their account.'}</p>}
       {job?.message && <p role="status">{job.message}</p>}
       {active && !expired && <p className="muted" role="status">{job.status === 'queued' ? 'Waiting for the worker…' : 'Matching songs and assembling playlists…'}</p>}
-      {expired && <p className="error-msg">The job stopped responding. Retry to continue from its saved progress.</p>}
+      {expired && <p className="error-msg">The job stopped responding. Retry to create missing playlists. Existing playlists will be left untouched.</p>}
       {published.length > 0 && (
         <div className="playlist-links">
           {published.map(playlist => (
@@ -138,7 +138,7 @@ function ServicePlaylists({ service, connection, job, matches, playlists, canRun
         </details>
       )}
       <button type="button" className="btn btn-secondary" disabled={!ready || !canRun || starting || (active && !expired)} onClick={start}>
-        {starting ? 'Starting…' : active && !expired ? 'Running…' : job ? `Sync ${service.name} playlists` : `Create ${service.name} playlists`}
+        {starting ? 'Starting…' : active && !expired ? 'Running…' : job ? `Create missing ${service.name} playlists` : `Create ${service.name} playlists`}
       </button>
       {message && <p className="error-msg" role="alert">{message}</p>}
     </section>
