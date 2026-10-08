@@ -17,6 +17,8 @@ This is intentionally a toy project. Keep the workflow lightweight:
 - `npm run db:status` — list applied and pending migrations
 - `npm run db:plan` — dry run; reports pending migrations, changes nothing
 - `npm run db:deploy` — apply pending migrations
+- `npm run playlists:deploy` — apply migrations, upload server secrets, deploy the playlist worker
+- `npm run tidal:connect` / `npm run spotify:connect` — one-time playlist-owner authorization
 
 The `db:*` scripts run `scripts/migrate.mjs`, which applies migrations through the Supabase Management API. It needs a personal access token in `SUPABASE_ACCESS_TOKEN` or `~/.muzak-supabase-token`, and reads the project ref out of the Supabase URL in `.env.local`. `db:link` and `db:push` still drive the Supabase CLI instead; both paths record versions in `supabase_migrations.schema_migrations`, so they stay interchangeable.
 
@@ -93,6 +95,7 @@ The remaining Season 1 paths (`/queue`, `/archive`, `/history`, `/settings`) red
 - `src/lib/supabase.js` owns the Supabase client and env-var guard.
 - `src/lib/data.js` owns the per-page fetchers and the realtime table lists they subscribe to.
 - `src/lib/mutations.js` owns every write except avatar uploads, which go through `src/lib/profilePictures.js`. No component or hook calls Supabase directly; keep it that way.
+- The server-only `supabase/functions/generate-playlists/` worker owns external playlist writes and its job state. Frontend playlist requests still go through `src/lib/mutations.js`.
 
 Keep scoring rules centralized in `src/lib/scoring.js`; duplicate handling must be identical on Home, Rounds history, and Players standings.
 
@@ -114,6 +117,26 @@ Merges only apply within a side. Players on opposite sides never shared a voting
 ## Schema
 
 The schema source of truth is `supabase/migrations/`; `SETUP.md` documents how to apply it. Keep migrations in sync with table assumptions in code.
+
+## Automatic Listening Playlists
+
+Supabase Cron launches `generate-playlists` at Thursday 12:05 a.m. Pacific. Two
+weekly UTC slots are guarded by Pacific local time, so each connected service
+runs once weekly across daylight saving changes. The worker reuses `schedule.js`
+and `groups.js`; it never advances phases or rebalances existing sides.
+
+Each split round gets separate public Side A and Side B playlists on Tidal and
+Spotify. Search uses title and artist, and Gemini selects from the top five
+candidates with four concurrent songs per service. Successful matches survive
+manual retries. Admin has per-service job buttons, progress, links, and unresolved
+song details. `round_playlists` remains the frontend's source of playlist links.
+
+API keys stay in Edge Function secrets; OAuth credentials stay in Supabase Vault.
+`.env.tidal.local` is the ignored local provisioning file for both services.
+Automation state tables are publicly readable, worker-writable only. Public
+admin requests are limited to the current round after submissions close, with
+concurrency and attempt limits. No league login is added. See `SETUP.md` for
+credential setup, deployment, account requirements, and free-tier cost details.
 
 ## Profile Pictures
 

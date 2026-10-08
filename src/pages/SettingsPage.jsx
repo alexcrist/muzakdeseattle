@@ -18,6 +18,7 @@ import AdminUnlock from './admin/AdminUnlock.jsx'
 import DuplicateMergeTool from './admin/DuplicateMergeTool.jsx'
 import PlayerStatusTool from './admin/PlayerStatusTool.jsx'
 import ScheduleEditor from './admin/ScheduleEditor.jsx'
+import PlaylistAutomation from './admin/PlaylistAutomation.jsx'
 
 export default function AdminPage() {
   const { player } = usePlayer()
@@ -93,6 +94,8 @@ export default function AdminPage() {
       ) : (
         <>
           <DuplicateMergeSection settings={settings} />
+
+          <PlaylistAutomation settings={settings} rounds={data.rounds} />
 
           <section className="card admin-settings">
             <div className="section-heading">

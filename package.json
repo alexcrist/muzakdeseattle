@@ -11,7 +11,11 @@
     "db:push": "supabase db push",
     "db:status": "node scripts/migrate.mjs --status",
     "db:plan": "node scripts/migrate.mjs --dry-run",
-    "db:deploy": "node scripts/migrate.mjs"
+    "db:deploy": "node scripts/migrate.mjs",
+    "playlists:deploy": "node scripts/playlists.mjs deploy",
+    "tidal:deploy": "node scripts/playlists.mjs deploy",
+    "tidal:connect": "node scripts/playlists.mjs connect tidal",
+    "spotify:connect": "node scripts/playlists.mjs connect spotify"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

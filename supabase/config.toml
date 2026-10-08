@@ -4,6 +4,11 @@
 # working directory name when running `supabase init`.
 project_id = "muzakdeseattle"
 
+# Invoked only by the database dispatcher, using its Vault-backed worker secret.
+# The function checks that secret before claiming a queued job.
+[functions.generate-playlists]
+verify_jwt = false
+
 [api]
 enabled = true
 # Port to use for the API URL.

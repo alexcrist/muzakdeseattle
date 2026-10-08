@@ -112,6 +112,11 @@ export async function deleteRoundPlaylist(playlistId) {
   return { error }
 }
 
+export async function requestPlaylistGeneration(service) {
+  const { data, error } = await supabase.rpc('request_playlists', { p_service: service })
+  return { data, error: error || (data?.error ? { message: data.error } : null) }
+}
+
 export async function addRound({ form, playerId, context }) {
   const nextPosition = context.orderedRounds.length
   const weekStart = addDays(context.startDate, nextPosition * 7)

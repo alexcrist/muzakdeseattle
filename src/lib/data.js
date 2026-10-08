@@ -29,6 +29,8 @@ export const PLAYER_PROFILE_REALTIME_TABLES = [...PLAYER_REALTIME_TABLES, 'comme
 export const PAST_SONGS_REALTIME_TABLES = PLAYER_PROFILE_REALTIME_TABLES
 export const ADMIN_REALTIME_TABLES = ['rounds', 'songs', 'votes', 'duplicate_groups', 'duplicate_group_songs', 'players', 'round_groups']
 export const ADMIN_SUMMARY_REALTIME_TABLES = ['rounds', 'players']
+export const PLAYLIST_AUTOMATION_REALTIME_TABLES = ['playlist_automation_settings', 'playlist_jobs', 'playlist_song_matches', 'playlist_managed_playlists']
+export const EMPTY_PLAYLIST_AUTOMATION_DATA = { connections: [], jobs: [], matches: [], playlists: [], error: '' }
 
 export function homeRoundRealtimeTables(roundId) {
   if (!roundId) return HOME_ROUND_REALTIME_TABLES
@@ -359,6 +361,27 @@ export async function fetchAdminSummaryData() {
     ...EMPTY_ADMIN_DATA,
     rounds: rounds || [],
     players: players || [],
+  }
+}
+
+export async function fetchPlaylistAutomationData(roundId) {
+  const [connections, jobs, matches, playlists] = await Promise.all([
+    supabase.from('playlist_automation_settings').select('service, enabled, connected'),
+    roundId ? supabase.from('playlist_jobs')
+      .select('service, round_id, run_id, status, started_at, finished_at, message, total_songs, matched_songs')
+      .eq('round_id', roundId) : Promise.resolve({ data: [] }),
+    roundId ? supabase.from('playlist_song_matches')
+      .select('service, song_id, status, track_id, track_label, reason, songs(title, artist)')
+      .eq('round_id', roundId) : Promise.resolve({ data: [] }),
+    roundId ? supabase.from('playlist_managed_playlists')
+      .select('service, group_index, url, published').eq('round_id', roundId)
+      : Promise.resolve({ data: [] }),
+  ])
+  return {
+    connections: connections.data || [], jobs: jobs.data || [],
+    matches: matches.data || [], playlists: playlists.data || [],
+    error: [connections, jobs, matches, playlists].some(result => result.error)
+      ? 'Could not load playlist automation. The backend may still need to be deployed.' : '',
   }
 }
 
