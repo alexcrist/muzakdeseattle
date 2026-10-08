@@ -10,6 +10,8 @@ This is intentionally a toy project. Keep the workflow lightweight:
 - Never run a production build to verify changes.
 - Never perform visual checking. Do not start the dev or preview server, use browser automation, or take screenshots to inspect the UI.
 - Make the requested changes and stop without testing, building, or visually reviewing them.
+- Do not automatically commit or push changes. Leave changes local until the user explicitly asks for a commit or push; permission to commit does not imply permission to push.
+- Batch changes before deploying. Every push to `main` triggers a Netlify deployment, and the monthly deployment allowance is limited. A request to make a change is not permission to push or deploy it.
 
 ## Commands
 
