@@ -79,6 +79,7 @@ export default function AppreciationSongCard({
           player={player}
           revealAuthors
           songId={entry.canonical_song_id}
+          submitterIds={entry.submitterIds}
           onChanged={onChanged}
           roundId={roundId}
         />

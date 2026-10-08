@@ -1364,6 +1364,18 @@ select:focus {
   font-size: 0.84rem;
 }
 
+.comment-op {
+  display: inline-block;
+  margin-left: 0.4rem;
+  border-radius: 999px;
+  background: var(--grape-soft);
+  color: var(--grape);
+  padding: 0.06rem 0.325rem;
+  font-size: calc(0.68rem - 2px);
+  font-weight: 700;
+  vertical-align: middle;
+}
+
 .anon-name {
   display: inline-flex;
   border: 2px solid var(--grape);

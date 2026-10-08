@@ -211,6 +211,7 @@ export default function VotingView({
                     revealAuthors={false}
                     anonymousLabelFor={anonymousLabelFor}
                     songId={song.id}
+                    submitterIds={[song.player_id]}
                     onChanged={onChanged}
                     roundId={round.id}
                     compact

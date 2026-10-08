@@ -5,7 +5,7 @@ import { indexCommentLikes } from './homeUtils.js'
 
 const GIPHY_API_KEY = import.meta.env.VITE_GIPHY_API_KEY
 
-export default function CommentThread({ comments, commentLikes = [], commentLikesIndex = null, player, revealAuthors, anonymousLabelFor, songId, roundId, onChanged, compact = false }) {
+export default function CommentThread({ comments, commentLikes = [], commentLikesIndex = null, player, revealAuthors, anonymousLabelFor, songId, submitterIds = [], roundId, onChanged, compact = false }) {
   const [body, setBody] = useState('')
   const [gif, setGif] = useState(null)
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
@@ -99,6 +99,9 @@ export default function CommentThread({ comments, commentLikes = [], commentLike
                 ))}
                 <div>
                   <strong className={author ? '' : 'anon-name'}>{author ? `${author.name}${isMine ? ' (you)' : ''}` : `${anonymousName}${isMine ? ' (you)' : ''}`}</strong>
+                  {songId && submitterIds.includes(comment.player_id) && (
+                    <span className="comment-op" title="Song submitter" aria-label="Original poster (song submitter)">OP</span>
+                  )}
                   {comment.body && <p>{comment.body}</p>}
                   {comment.gif_url && (
                     <img
