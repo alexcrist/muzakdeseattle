@@ -103,9 +103,6 @@ async function runJob(db, job) {
       if (existingSides.has(groupIndex)) return { skipped: true }
       const sideSongs = songs.filter(song => !sides.isSplit || sides.sideByPlayerId[song.player_id] === groupIndex)
       if (!sideSongs.length) throw new JobError('No songs were submitted for this side; no playlist was created.')
-      if (sideSongs.some(song => bySong.get(song.id)?.status !== 'matched')) {
-        throw new JobError('A missing playlist needs more song matches. Review the unmatched songs, then retry.')
-      }
       const ordered = listeningOrderFor(sideSongs, { roundId: job.round_id, playerId: `playlist-side-${groupIndex}` })
       const trackIds = [...new Set(ordered.map(song => bySong.get(song.id)?.track_id).filter(Boolean))]
       let playlist = previousPlaylists.find(row => row.group_index === groupIndex)
@@ -137,7 +134,7 @@ async function runJob(db, job) {
     const completed = matched === pendingSongs.length && errors.length === 0
     await updateJob({
       status: completed ? 'completed' : 'partial', finished_at: new Date().toISOString(),
-      message: `${publishedCount} public playlist(s) created. ${skippedCount} existing playlist(s) left untouched. ${matched}/${pendingSongs.length} submissions matched for missing playlists.${errors.length ? ` ${errors.join(' ')}` : ''}`,
+      message: `${publishedCount} public playlist(s) created. ${skippedCount} existing playlist(s) left untouched. ${matched}/${pendingSongs.length} submissions matched for missing playlists.${errors.length ? ` ${errors.join(' ')}` : ''}${matched < pendingSongs.length ? ' Songs without matches were omitted. Review them in Admin; existing playlists will not be updated on retry.' : ''}`,
     })
   } catch (error) {
     try {

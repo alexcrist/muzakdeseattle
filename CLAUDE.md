@@ -129,7 +129,8 @@ Each split round gets separate public Side A and Side B playlists on Tidal and
 Spotify. Search uses title and artist, and Gemini selects from the top five
 candidates with four concurrent songs per service. Successful matches survive
 manual retries. Both scheduled and manual jobs create only missing playlists;
-existing managed or manually linked playlists are left untouched. Admin has per-service job buttons, progress, links, and unresolved
+existing managed or manually linked playlists are left untouched. Songs without
+matches are omitted; create the playlist with whatever matches succeeded. Admin has per-service job buttons, progress, links, and unresolved
 song details. `round_playlists` remains the frontend's source of playlist links.
 
 API keys stay in Edge Function secrets; OAuth credentials stay in Supabase Vault.

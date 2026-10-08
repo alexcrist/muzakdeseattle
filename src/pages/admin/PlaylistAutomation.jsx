@@ -53,7 +53,7 @@ export default function PlaylistAutomation({ settings, rounds }) {
           ))}
         </div>
       )}
-      <p className="muted">Jobs run in the cloud. You can close this page. Existing playlists are left untouched. Retrying creates only missing playlists.</p>
+      <p className="muted">Jobs run in the cloud. You can close this page. Songs without matches are omitted and listed below. Existing playlists are left untouched. Retrying creates only missing playlists.</p>
     </section>
   )
 }

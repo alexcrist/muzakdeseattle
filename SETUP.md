@@ -198,9 +198,10 @@ are retried within that budget; remaining failures appear in Admin for a manual
 retry. There is no recurring retry cron.
 
 Successful matches are reused when the submission and matching configuration
-have not changed. Unmatched or failed songs on missing sides are retried. A new
-playlist is created only after every song on its side is matched; Admin lists
-what needs attention.
+have not changed. Playlists are created with the successfully matched songs;
+unmatched or failed songs are omitted and listed in Admin. If no songs match,
+the playlist is empty. Once created, playlists stay untouched on retries; add
+any omitted songs directly in the music service.
 The generated playlist order is stable and shared within each side; it cannot
 represent every player's individual in-app listening order. Identical selected
 tracks appear once per playlist. Song rows, duplicate merges, and votes are
