@@ -93,8 +93,6 @@ export default function AdminPage() {
         <AdminUnlock onUnlock={() => setAdminUnlocked(true)} />
       ) : (
         <>
-          <DuplicateMergeSection settings={settings} />
-
           <PlaylistAutomation settings={settings} rounds={data.rounds} />
 
           <section className="card admin-settings">
@@ -146,6 +144,8 @@ export default function AdminPage() {
           </section>
 
           <PlayerStatusTool players={data.players} currentPlayerId={player.id} onChanged={reload} />
+
+          <DuplicateMergeSection settings={settings} />
         </>
       )}
     </main>
