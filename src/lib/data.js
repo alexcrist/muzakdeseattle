@@ -29,7 +29,7 @@ export const PLAYER_PROFILE_REALTIME_TABLES = [...PLAYER_REALTIME_TABLES, 'comme
 export const PAST_SONGS_REALTIME_TABLES = PLAYER_PROFILE_REALTIME_TABLES
 export const ADMIN_REALTIME_TABLES = ['rounds', 'songs', 'votes', 'duplicate_groups', 'duplicate_group_songs', 'players', 'round_groups']
 export const ADMIN_SUMMARY_REALTIME_TABLES = ['rounds', 'players']
-export const PLAYLIST_AUTOMATION_REALTIME_TABLES = ['playlist_automation_settings', 'playlist_jobs', 'playlist_song_matches', 'playlist_managed_playlists']
+export const PLAYLIST_AUTOMATION_REALTIME_TABLES = ['playlist_automation_settings', 'playlist_jobs', 'playlist_song_matches', 'round_playlists']
 export const EMPTY_PLAYLIST_AUTOMATION_DATA = { connections: [], jobs: [], matches: [], playlists: [], error: '' }
 
 export function homeRoundRealtimeTables(roundId) {
@@ -373,13 +373,22 @@ export async function fetchPlaylistAutomationData(roundId) {
     roundId ? supabase.from('playlist_song_matches')
       .select('service, song_id, status, track_id, track_label, reason, songs(title, artist)')
       .eq('round_id', roundId) : Promise.resolve({ data: [] }),
-    roundId ? supabase.from('playlist_managed_playlists')
-      .select('service, group_index, url, published').eq('round_id', roundId)
+    roundId ? supabase.from('round_playlists')
+      .select('id, service, group_index, url').eq('round_id', roundId)
       : Promise.resolve({ data: [] }),
   ])
   return {
     connections: connections.data || [], jobs: jobs.data || [],
-    matches: matches.data || [], playlists: playlists.data || [],
+    matches: matches.data || [], playlists: (playlists.data || []).map(playlist => {
+      let service = playlist.service?.trim().toLowerCase()
+      try {
+        const host = new URL(playlist.url).hostname.toLowerCase()
+        for (const provider of ['tidal', 'spotify']) {
+          if (host === `${provider}.com` || host.endsWith(`.${provider}.com`)) service = provider
+        }
+      } catch { /* A custom service label still works without a recognized URL. */ }
+      return { ...playlist, service }
+    }),
     error: [connections, jobs, matches, playlists].some(result => result.error)
       ? 'Could not load playlist automation. The backend may still need to be deployed.' : '',
   }

@@ -120,25 +120,12 @@ export function tidalClient(db, deadline) {
     return rows
   }
 
-  async function createPlaylist(playlist, trackIds, runId) {
-    if (playlist.playlist_id) return { skipped: true }
-    let playlistId = playlist.playlist_id
-    if (!playlistId) {
-      // The payload and key are saved before the request, so a crash between
-      // creation and saving the response can replay the exact operation.
-      const created = await request('/playlists', { method: 'POST', body: playlist.create_payload, key: playlist.create_key })
-      playlistId = created?.data?.id
-      if (!playlistId) throw new JobError('Tidal did not return the created playlist ID.')
-      await checked(db.from('playlist_managed_playlists').update({
-        playlist_id: playlistId, url: `https://tidal.com/playlist/${encodeURIComponent(playlistId)}`,
-        updated_at: new Date().toISOString(),
-      }).eq('service', 'tidal').eq('round_id', playlist.round_id).eq('group_index', playlist.group_index))
-    }
-
+  async function createPlaylist(playlist, trackIds, runId, onCreated) {
+    const created = await request('/playlists', { method: 'POST', body: playlist.create_payload, key: playlist.create_key })
+    const playlistId = created?.data?.id
+    if (!playlistId) throw new JobError('Tidal did not return the created playlist ID.')
+    await onCreated({ id: playlistId, url: `https://tidal.com/playlist/${encodeURIComponent(playlistId)}` })
     const path = `/playlists/${encodeURIComponent(playlistId)}`
-    // An idempotent create may recover an earlier response. Never alter a
-    // recovered playlist that already contains tracks.
-    if ((await items(playlistId)).length) return { skipped: true }
     const missing = trackIds
     for (let offset = 0; offset < missing.length; offset += 50) {
       const data = missing.slice(offset, offset + 50).map(id => ({ type: 'tracks', id }))

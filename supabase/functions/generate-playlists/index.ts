@@ -18,7 +18,7 @@ async function runJob(db, job) {
     .eq('service', service).eq('round_id', job.round_id).eq('run_id', job.run_id))
 
   try {
-    const [settings, rounds, config, players, groupRows, songs, previousMatches, previousPlaylists, linkedPlaylists] = await Promise.all([
+    const [settings, rounds, config, players, groupRows, songs, previousMatches, linkedPlaylists] = await Promise.all([
       checked(db.from('league_settings').select('*').eq('id', 1).single()),
       checked(db.from('rounds').select('*').order('queue_position')),
       checked(db.from('playlist_automation_settings').select('*').eq('service', service).single()),
@@ -26,7 +26,6 @@ async function runJob(db, job) {
       checked(db.from('round_groups').select('round_id, player_id, group_index')),
       checked(db.from('songs').select('id, round_id, player_id, title, artist, album, link, submitter_note').eq('round_id', job.round_id)),
       checked(db.from('playlist_song_matches').select('*').eq('service', service).eq('round_id', job.round_id)),
-      checked(db.from('playlist_managed_playlists').select('*').eq('service', service).eq('round_id', job.round_id)),
       checked(db.from('round_playlists').select('group_index, service, url').eq('round_id', job.round_id)),
     ])
     if (!config.enabled || !config.connected) throw new JobError(`${serviceName} automation is not connected and enabled.`)
@@ -67,8 +66,7 @@ async function runJob(db, job) {
       } catch { return false }
     }
     const existingSides = new Set(sideIndexes.filter(groupIndex =>
-      previousPlaylists.some(row => row.group_index === groupIndex && row.playlist_id)
-      || linkedPlaylists.some(row => (row.group_index ?? 0) === groupIndex && isServiceLink(row))))
+      linkedPlaylists.some(row => (row.group_index ?? 0) === groupIndex && isServiceLink(row))))
     const pendingSongs = songs.filter(song => !existingSides.has(sides.isSplit ? sides.sideByPlayerId[song.player_id] : 0))
     await updateJob({ total_songs: pendingSongs.length, matched_songs: 0, message: `Finding the submitted recordings on ${serviceName}.` })
     const music = service === 'tidal' ? tidalClient(db, deadline) : spotifyClient(db, deadline)
@@ -105,27 +103,25 @@ async function runJob(db, job) {
       if (!sideSongs.length) throw new JobError('No songs were submitted for this side; no playlist was created.')
       const ordered = listeningOrderFor(sideSongs, { roundId: job.round_id, playerId: `playlist-side-${groupIndex}` })
       const trackIds = [...new Set(ordered.map(song => bySong.get(song.id)?.track_id).filter(Boolean))]
-      let playlist = previousPlaylists.find(row => row.group_index === groupIndex)
-      if (!playlist) {
-        const sideName = sides.isSplit ? ` — Side ${groupIndex === 0 ? 'A' : 'B'}` : ''
-        const name = `${settings.league_name} — ${settings.season_label} — Round ${context.currentRoundIndex + 1}: ${context.currentRound.theme_name}${sideName}`.slice(0, 250)
-        const description = `${settings.season_label}, week of ${context.currentWeekStart}${sideName}. ${context.currentRound.theme_name}. Submitted songs; submitters stay anonymous.`.slice(0, 500)
-        playlist = await checked(db.from('playlist_managed_playlists').insert({
-          service, round_id: job.round_id, group_index: groupIndex,
-          create_payload: service === 'tidal'
-            ? { data: { type: 'playlists', attributes: { name, description, accessType: 'PUBLIC' } } }
-            : { name, description, public: true, collaborative: false },
-        }).select('*').single())
+      const sideName = sides.isSplit ? ` — Side ${groupIndex === 0 ? 'A' : 'B'}` : ''
+      const name = `${settings.league_name} — ${settings.season_label} — Round ${context.currentRoundIndex + 1}: ${context.currentRound.theme_name}${sideName}`.slice(0, 250)
+      const description = `${settings.season_label}, week of ${context.currentWeekStart}${sideName}. ${context.currentRound.theme_name}. Submitted songs; submitters stay anonymous.`.slice(0, 250)
+      // Only visible round links decide whether a playlist exists. A fresh job
+      // gets a fresh creation key, so removing a link permits recreation.
+      const playlist = {
+        create_key: crypto.randomUUID(),
+        create_payload: service === 'tidal'
+          ? { data: { type: 'playlists', attributes: { name, description, accessType: 'PUBLIC' } } }
+          : { name, description, public: true },
       }
-      const published = await music.createPlaylist(playlist, trackIds, job.run_id)
-      if (published.skipped) return published
-      // Home and archive already subscribe to this table and show each side's links.
-      await checked(db.from('round_playlists').upsert({
-        round_id: job.round_id, group_index: groupIndex, service: serviceName, url: published.url,
-      }, { onConflict: 'round_id,group_index,url' }))
-      await checked(db.from('playlist_managed_playlists').update({
-        published: true, updated_at: new Date().toISOString(),
-      }).eq('service', service).eq('round_id', job.round_id).eq('group_index', groupIndex))
+      const onCreated = async created => {
+        // Publish the link immediately. A later track-write failure leaves a
+        // visible playlist the admin can remove before retrying, not hidden state.
+        await checked(db.from('round_playlists').upsert({
+          round_id: job.round_id, group_index: groupIndex, service: serviceName, url: created.url,
+        }, { onConflict: 'round_id,group_index,url' }))
+      }
+      const published = await music.createPlaylist(playlist, trackIds, job.run_id, onCreated)
       return published
     }))
     const errors = outcomes.filter(result => result.status === 'rejected').map(result => safeError(result.reason))

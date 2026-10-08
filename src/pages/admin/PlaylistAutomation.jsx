@@ -53,7 +53,7 @@ export default function PlaylistAutomation({ settings, rounds }) {
           ))}
         </div>
       )}
-      <p className="muted">Jobs run in the cloud. You can close this page. Songs without matches are omitted and listed below. Existing playlists are left untouched. Retrying creates only missing playlists.</p>
+      <p className="muted">Jobs run in the cloud. You can close this page. Songs without matches are omitted and listed below. Existing playlists are left untouched. Retrying creates only missing playlists. Remove a playlist link from Muzak to allow it to be created again.</p>
     </section>
   )
 }
@@ -88,7 +88,7 @@ function ServicePlaylists({ service, connection, job, matches, playlists, canRun
   }
 
   const unresolved = matches.filter(match => match.status !== 'matched')
-  const published = playlists.filter(playlist => playlist.published && playlist.url)
+  const published = playlists.filter(playlist => playlist.url)
 
   return (
     <section className="card">
@@ -97,13 +97,13 @@ function ServicePlaylists({ service, connection, job, matches, playlists, canRun
         <span className="soft-tag">{!ready ? 'Setup needed' : expired ? 'Retry available' : STATUS_LABELS[job?.status] || 'Connected'}</span>
       </div>
       {!ready && <p className="muted">{!connection?.enabled ? 'API keys need to be configured.' : 'The playlist owner needs to connect their account.'}</p>}
-      {job?.message && <p role="status">{job.message}</p>}
+      {job?.message && <p role="status">Last run: {job.message}</p>}
       {active && !expired && <p className="muted" role="status">{job.status === 'queued' ? 'Waiting for the worker…' : 'Matching songs and assembling playlists…'}</p>}
       {expired && <p className="error-msg">The job stopped responding. Retry to create missing playlists. Existing playlists will be left untouched.</p>}
       {published.length > 0 && (
         <div className="playlist-links">
           {published.map(playlist => (
-            <a key={playlist.group_index} href={playlist.url} target="_blank" rel="noreferrer">
+            <a key={playlist.id} href={playlist.url} target="_blank" rel="noreferrer">
               {published.length > 1 ? groupLabel(playlist.group_index) : 'Open playlist'} ↗
             </a>
           ))}
@@ -111,7 +111,7 @@ function ServicePlaylists({ service, connection, job, matches, playlists, canRun
       )}
       {unresolved.length > 0 && (
         <div>
-          <h4>Songs needing attention</h4>
+          <h4>Songs needing attention from previous matching</h4>
           <ul>
             {unresolved.map(match => (
               <li key={match.song_id}>

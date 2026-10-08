@@ -134,7 +134,9 @@ Tidal catalog calls are serialized with shared retry waits. Every Tidal, Spotify
 and Gemini request (including retries) reserves a database-backed slot, at most
 one request per second per provider across jobs. Successful matches survive
 manual retries. Both scheduled and manual jobs create only missing playlists;
-existing managed or manually linked playlists are left untouched. Songs without
+only current `round_playlists` links determine which sides are skipped. Removing
+a link permits recreation; old managed-playlist records must not block jobs.
+Existing linked playlists are left untouched. Songs without
 matches are omitted; create the playlist with whatever matches succeeded. Admin has per-service job buttons, progress, links, and unresolved
 song details. `round_playlists` remains the frontend's source of playlist links.
 

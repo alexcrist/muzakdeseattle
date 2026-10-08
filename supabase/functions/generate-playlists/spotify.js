@@ -5,7 +5,6 @@ const API = 'https://api.spotify.com/v1'
 export function spotifyClient(db, deadline) {
   const jsonRequest = rateLimitedRequest(db, 'spotify')
   let tokenPromise
-  let ownerPromise
 
   async function userToken() {
     const saved = await checked(db.rpc('playlist_get_oauth', { p_service: 'spotify' }), 'Could not read the Spotify connection.')
@@ -31,7 +30,9 @@ export function spotifyClient(db, deadline) {
     const url = new URL(path.startsWith('/') ? `${API}${path}` : path, API)
     if (url.origin !== 'https://api.spotify.com' || !url.pathname.startsWith('/v1/')) throw new JobError('Spotify returned an unexpected pagination URL.')
     const token = await (tokenPromise ||= userToken())
-    return jsonRequest('Spotify', url, {
+    const operation = method === 'POST' && url.pathname === '/v1/me/playlists' ? 'playlist creation'
+      : url.pathname.endsWith('/items') ? (method === 'POST' ? 'adding tracks' : 'reading tracks') : 'catalog/account request'
+    return jsonRequest(`Spotify ${operation}`, url, {
       method, headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     }, until, attempts)
@@ -62,28 +63,21 @@ export function spotifyClient(db, deadline) {
     return rows
   }
 
-  async function createPlaylist(playlist, trackIds) {
-    if (playlist.playlist_id) return { skipped: true }
-    let playlistId = playlist.playlist_id
-    if (!playlistId) {
-      const owner = await (ownerPromise ||= request('/me'))
-      const marker = `Muzak automation: ${playlist.create_key}`
-      const owned = await collect('/me/playlists?limit=50')
-      // Spotify has no create idempotency key. Recover a previously created
-      // playlist after a lost response before ever issuing another POST.
-      const recovered = owned.find(row => row && row.owner?.id === owner.id && row.description?.includes(marker))
-      const created = recovered || await request('/me/playlists', {
-        method: 'POST', attempts: 1,
-        body: { ...playlist.create_payload, description: `${playlist.create_payload.description.slice(0, 220)}\n${marker}`, public: true },
-      })
-      playlistId = created?.id
-      if (!playlistId) throw new JobError('Spotify did not return the created playlist ID.')
-      await checked(db.from('playlist_managed_playlists').update({
-        playlist_id: playlistId, url: `https://open.spotify.com/playlist/${encodeURIComponent(playlistId)}`,
-        updated_at: new Date().toISOString(),
-      }).eq('service', 'spotify').eq('round_id', playlist.round_id).eq('group_index', playlist.group_index))
-      if (recovered) return { skipped: true }
-    }
+  async function createPlaylist(playlist, trackIds, _runId, onCreated) {
+    // No account-wide recovery scan or persisted provider ID. Muzak's visible
+    // round links are the only source of truth for skipping a side.
+    const created = await request('/me/playlists', {
+      method: 'POST', attempts: 1,
+      body: {
+        name: playlist.create_payload.name,
+        // Live API diagnosis: adding a newline changes creation from 201 to 400.
+        description: playlist.create_payload.description.replace(/[\r\n]+/g, ' ').slice(0, 250),
+        public: true,
+      },
+    })
+    const playlistId = created?.id
+    if (!playlistId) throw new JobError('Spotify did not return the created playlist ID.')
+    await onCreated({ id: playlistId, url: `https://open.spotify.com/playlist/${encodeURIComponent(playlistId)}` })
     const path = `/playlists/${encodeURIComponent(playlistId)}`
     const uris = trackIds.map(id => `spotify:track:${id}`)
     // Populate only the playlist created in this invocation; never replace items.

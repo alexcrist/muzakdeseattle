@@ -216,12 +216,18 @@ never modified by playlist generation.
 Jobs are locked per service and round. Public admin callers can request only the
 current round, wait five minutes between attempts, and make at most eight
 attempts per service per Pacific day. The worker alone writes job state and
-matches. Both scheduled and manual jobs skip existing playlists per service
-and side, including manually linked playlists. Their contents, names, and
-visibility are never changed. Only missing playlists are created. Tidal
-idempotency keys and a Spotify creation marker avoid duplicate creation after
-an interrupted response. If track insertion fails after creation, repair that
-playlist directly in the music service; retries leave it untouched.
+matches. Both scheduled and manual jobs skip only playlists currently linked in
+`round_playlists`, per service and side. Removing a link from Muzak allows a fresh
+playlist on the next run; old managed-playlist records no longer control creation
+or appear in Admin. Existing linked playlists are never changed. Successful song
+matches remain cached to avoid repeated searches and Gemini requests.
+
+New playlists are linked immediately after creation, before tracks are added.
+If insertion fails, the partial playlist is visible: remove its Muzak link to
+recreate it, or repair it in the music service. Removing a Muzak link does not
+delete the external playlist. If a creation response is lost before the link can
+be saved, a retry can create another playlist; check the provider account after
+an ambiguous creation failure. Spotify creation is never automatically retried.
 
 The configuration is in `playlist_automation_settings`, writable only by the
 backend/operator. `candidate_count` accepts 1–10; `concurrency` accepts 1–8.
