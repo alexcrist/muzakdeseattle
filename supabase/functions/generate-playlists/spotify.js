@@ -42,7 +42,8 @@ export function spotifyClient(db, deadline) {
     const result = await request(`/search?${new URLSearchParams({
       q: `${song.title} ${song.artist}`.trim().slice(0, 256), type: 'track', market: 'US', limit: String(Math.min(count, 10)),
     })}`, { until })
-    return (result.tracks?.items || []).filter(track => track && track.is_playable !== false && !track.restrictions).map(track => ({
+    if (!Array.isArray(result?.tracks?.items)) throw new JobError('Spotify returned incomplete search results.', true)
+    return result.tracks.items.filter(track => track && track.is_playable !== false && !track.restrictions).map(track => ({
       id: track.id, title: track.name, version: '',
       artists: track.artists.map(artist => artist.name),
       albums: [{ title: track.album.name, releaseDate: track.album.release_date }],
@@ -57,37 +58,47 @@ export function spotifyClient(db, deadline) {
       if (visited.has(path) || visited.size >= 100) throw new JobError('Spotify playlist pagination could not be completed.')
       visited.add(path)
       const page = await request(path)
-      rows.push(...(page[field] || []))
+      if (!Array.isArray(page?.[field])) throw new JobError('Spotify returned incomplete playlist contents.', true)
+      rows.push(...page[field])
       path = page.next || null
     }
     return rows
   }
 
-  async function createPlaylist(playlist, trackIds, _runId, onCreated) {
-    // No account-wide recovery scan or persisted provider ID. Muzak's visible
-    // round links are the only source of truth for skipping a side.
-    const created = await request('/me/playlists', {
-      method: 'POST', attempts: 1,
-      body: {
-        name: playlist.create_payload.name,
-        public: true,
-      },
-    })
-    const playlistId = created?.id
-    if (!playlistId) throw new JobError('Spotify did not return the created playlist ID.')
-    await onCreated({ id: playlistId, url: `https://open.spotify.com/playlist/${encodeURIComponent(playlistId)}` })
+  const trackIdsFrom = items => new Set(items.map(row => row.item || row.track).filter(Boolean)
+    .flatMap(track => [track.id, track.linked_from?.id].filter(Boolean)))
+
+  async function fillPlaylist(playlistId, trackIds) {
     const path = `/playlists/${encodeURIComponent(playlistId)}`
-    const uris = trackIds.map(id => `spotify:track:${id}`)
-    // Populate only the playlist created in this invocation; never replace items.
+    const existing = trackIdsFrom(await collect(`${path}/items?limit=50&market=US`))
+    const uris = [...new Set(trackIds)].filter(id => !existing.has(id)).map(id => `spotify:track:${id}`)
     for (let offset = 0; offset < uris.length; offset += 100) {
+      // Never retry an ambiguous POST in place. A fresh worker reads contents
+      // first, including Spotify's relinked IDs, before adding anything.
       await request(`${path}/items`, { method: 'POST', body: { uris: uris.slice(offset, offset + 100) }, attempts: 1 })
     }
     const [published, items] = await Promise.all([request(path), collect(`${path}/items?limit=50&market=US`)])
-    if (published.public !== true) throw new JobError('Spotify did not publish the playlist. Review it directly in Spotify; retries leave existing playlists untouched.')
-    const actual = new Set(items.map(row => row.item || row.track).filter(Boolean).flatMap(track => [track.id, track.linked_from?.id].filter(Boolean)))
-    if (trackIds.some(id => !actual.has(id))) throw new JobError('Spotify did not add every matched track. Some recordings may be unavailable.')
+    if (published.public !== true) throw new JobError('Spotify playlist is not public. Review its sharing settings in Spotify.')
+    const actual = trackIdsFrom(items)
+    if (trackIds.some(id => !actual.has(id))) throw new JobError('Spotify has not added every matched track yet.', true)
     return { id: playlistId, url: `https://open.spotify.com/playlist/${encodeURIComponent(playlistId)}` }
   }
 
-  return { search, createPlaylist }
+  async function createPlaylist(playlist, trackIds, _runId, onCreated) {
+    let playlistId
+    try {
+      const created = await request('/me/playlists', {
+        method: 'POST', attempts: 1,
+        body: { name: playlist.create_payload.name, public: true },
+      })
+      playlistId = created?.id
+      if (!playlistId) throw new JobError('Spotify did not return the created playlist ID.')
+      await onCreated({ id: playlistId, url: `https://open.spotify.com/playlist/${encodeURIComponent(playlistId)}` })
+    } catch {
+      throw new JobError('Spotify playlist creation could not be confirmed. Check the account and save its link in Admin before retrying.')
+    }
+    return fillPlaylist(playlistId, trackIds)
+  }
+
+  return { search, createPlaylist, fillPlaylist }
 }

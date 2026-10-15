@@ -1,0 +1,109 @@
+<div id="muzak-pair-balance">
+  <style>
+    #muzak-pair-balance .balance-controls { display: grid; gap: 8px; margin: 16px 0 8px; }
+    #muzak-pair-balance .balance-metrics { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 12px 0; }
+    #muzak-pair-balance .balance-metrics span { white-space: nowrap; }
+    #muzak-pair-balance .balance-plot { width: 100%; }
+    #muzak-pair-balance .balance-chart { display: block; width: 100%; }
+    #muzak-pair-balance .balance-chart text { fill: var(--foreground); font-size: 12px; }
+    #muzak-pair-balance .balance-chart .domain,
+    #muzak-pair-balance .balance-chart .tick line { stroke: var(--border); }
+  </style>
+  <h2>How often pairs shared a side</h2>
+  <div class="balance-controls">
+    <label class="form-label" for="muzak-balance-week">Through <span id="muzak-balance-date" class="tabular-nums">week 10 · October 12, 2026</span></label>
+    <input id="muzak-balance-week" class="form-range" type="range" min="1" max="10" step="1" value="10" aria-describedby="muzak-balance-summary">
+  </div>
+  <div class="balance-plot"></div>
+  <div id="muzak-balance-summary" aria-live="polite">
+    <div class="balance-metrics tabular-nums">
+      <span id="muzak-balance-coverage">120 / 120 pairs have met</span>
+      <span id="muzak-balance-range">3–7 weeks together</span>
+    </div>
+    <div class="text-small" id="muzak-balance-spread">Spread: 0.94 weeks · Best possible: 0.94 · Random benchmark: 1.58</div>
+  </div>
+  <div class="text-small text-muted" style="margin-top:8px">16 players · Two sides of eight · Includes this week’s assigned sides · Spread = standard deviation</div>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script>
+    (() => {
+      const root = document.getElementById('muzak-pair-balance');
+      const series = [
+        { week: 1, date: 'August 10, 2026', counts: [64,56,0,0,0,0,0,0] },
+        { week: 2, date: 'August 17, 2026', counts: [32,64,24,0,0,0,0,0] },
+        { week: 3, date: 'August 24, 2026', counts: [16,48,48,8,0,0,0,0] },
+        { week: 4, date: 'August 31, 2026', counts: [4,40,48,24,4,0,0,0] },
+        { week: 5, date: 'September 7, 2026', counts: [0,24,48,32,16,0,0,0] },
+        { week: 6, date: 'September 14, 2026', counts: [0,12,32,48,24,4,0,0] },
+        { week: 7, date: 'September 21, 2026', counts: [0,2,26,44,36,10,2,0] },
+        { week: 8, date: 'September 28, 2026', counts: [0,0,16,28,52,20,4,0] },
+        { week: 9, date: 'October 5, 2026', counts: [0,0,2,26,52,28,10,2] },
+        { week: 10, date: 'October 12, 2026', counts: [0,0,0,12,40,48,16,4] }
+      ];
+      const slider = root.querySelector('#muzak-balance-week');
+      const plot = root.querySelector('.balance-plot');
+      const svg = d3.select(plot).append('svg').attr('class', 'balance-chart').attr('role', 'img');
+      const chartTitle = svg.append('title');
+      const chartDescription = svg.append('desc');
+      const frame = svg.append('rect').attr('data-chart-frame', '').attr('fill', 'none').attr('stroke', 'var(--border)');
+      const xAxis = svg.append('g');
+      const yAxis = svg.append('g');
+      const bars = svg.append('g');
+      const labels = svg.append('g');
+      const xTitle = svg.append('text').attr('class', 'axis-title').attr('data-axis', 'x').attr('text-anchor', 'middle').text('Number of player pairs');
+      const yTitle = svg.append('text').attr('class', 'axis-title').attr('data-axis', 'y').attr('text-anchor', 'middle').text('Weeks together');
+      const allValues = series.flatMap(d => d.counts);
+      const extent = d3.extent(allValues);
+      let selected = 10;
+      let initial = true;
+      function useSavedState(state) {
+        const value = Number(state?.modelContent?.throughWeek);
+        if (Number.isInteger(value) && value >= 1 && value <= series.length) selected = value;
+      }
+      useSavedState(window.openai?.widgetState);
+      function draw(animate = false) {
+        const record = series[selected - 1];
+        const width = Math.max(280, plot.getBoundingClientRect().width);
+        const height = 320;
+        const margin = { top: 12, right: 16, bottom: 54, left: 64 };
+        const x = d3.scaleLinear().domain([Math.min(0, extent[0]), extent[1] * 1.2]).range([margin.left + 4, width - margin.right - 4]);
+        const y = d3.scaleBand().domain(d3.range(record.counts.length)).range([margin.top + 4, height - margin.bottom - 4]).padding(0.24);
+        const records = record.counts.map((count, weeks) => ({ count, weeks }));
+        const duration = animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 220 : 0;
+        const transition = svg.transition().duration(duration);
+        svg.attr('viewBox', `0 0 ${width} ${height}`).attr('height', height);
+        chartTitle.text(`Pair meetings through week ${selected}`);
+        chartDescription.text(records.map(d => `${d.count} pairs have shared a side ${d.weeks} times`).join('; '));
+        frame.attr('x', margin.left).attr('y', margin.top).attr('width', width - margin.left - margin.right).attr('height', height - margin.top - margin.bottom);
+        xAxis.attr('transform', `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x).ticks(width < 400 ? 3 : 5).tickSizeOuter(0));
+        yAxis.attr('transform', `translate(${margin.left},0)`).call(d3.axisLeft(y).tickSize(0).tickPadding(10));
+        yAxis.select('.domain').remove();
+        xTitle.attr('x', (margin.left + width - margin.right) / 2).attr('y', height - 9);
+        yTitle.attr('transform', `translate(17,${(margin.top + height - margin.bottom) / 2}) rotate(-90)`);
+        bars.selectAll('rect').data(records, d => d.weeks).join('rect')
+          .attr('fill', 'var(--viz-series-1)').attr('x', x(0)).attr('y', d => y(d.weeks)).attr('height', y.bandwidth())
+          .transition(transition).attr('width', d => Math.max(0, x(d.count) - x(0)));
+        labels.selectAll('text').data(records, d => d.weeks).join('text')
+          .attr('class', 'tabular-nums').attr('dominant-baseline', 'middle').attr('y', d => y(d.weeks) + y.bandwidth() / 2)
+          .text(d => d.count).transition(transition).attr('x', d => x(d.count) + 6);
+        slider.value = String(selected);
+        root.querySelector('#muzak-balance-date').textContent = `week ${selected} · ${record.date}`;
+        root.querySelector('#muzak-balance-coverage').textContent = `${120 - record.counts[0]} / 120 pairs have met`;
+        const occupied = records.filter(d => d.count > 0).map(d => d.weeks);
+        root.querySelector('#muzak-balance-range').textContent = `${d3.min(occupied)}–${d3.max(occupied)} weeks together`;
+        const mean = d3.sum(records, d => d.count * d.weeks) / 120;
+        const sd = Math.sqrt(d3.sum(records, d => d.count * (d.weeks - mean) ** 2) / 120).toFixed(2);
+        const best = Math.sqrt(4 * selected * (15 - selected) / 225).toFixed(2);
+        const random = Math.sqrt(selected * 7 / 15 * 8 / 15).toFixed(2);
+        root.querySelector('#muzak-balance-spread').textContent = `Spread: ${sd} weeks · Best possible: ${best} · Random benchmark: ${random}`;
+        initial = false;
+      }
+      slider.addEventListener('input', () => { selected = Number(slider.value); draw(true); });
+      slider.addEventListener('change', () => {
+        window.openai?.setWidgetState?.({ modelContent: { throughWeek: selected }, privateContent: null }).catch(() => {});
+      });
+      window.addEventListener('openai:set_globals', event => { useSavedState(event.detail?.globals?.widgetState); draw(); });
+      new ResizeObserver(() => draw(!initial)).observe(plot);
+      draw();
+    })();
+  </script>
+</div>

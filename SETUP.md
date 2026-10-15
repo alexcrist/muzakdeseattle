@@ -178,7 +178,7 @@ GEMINI_API_KEY=...
 
 ### Admin and matching behavior
 
-Unlock **Admin → Listening playlists**, then use **Create** or **Create missing playlists** for the
+Unlock **Admin → Listening playlists**, then use **Create** or **Retry / repair playlists** for the
 desired service. The button is available during the current round's voting and
 appreciation phases. The job continues if you close the page. Status and results
 update through Supabase Realtime, with a Refresh status button as a fallback.
@@ -199,35 +199,64 @@ Gemini shares its limit across both services.
 Tidal retry waits hold the same queue; if rate-limit retries are exhausted,
 remaining catalog searches stop for that job. Services run
 independently, so a Spotify error does not prevent Tidal from finishing. Worker
-wall time is bounded for Supabase Free's 150-second limit. Rate-limit responses
-are retried within that budget; remaining failures appear in Admin for a manual
-retry. There is no recurring retry cron.
+wall time is bounded: matching gets 90 seconds and the worker reserves the
+remaining window for playlist writes and progress saves.
+
+A database cron checks once a minute for unfinished jobs. Timeouts, network
+failures, rate limits, invalid/incomplete provider responses, and temporary
+server errors remain **pending**, rather than becoming catalog misses. Recovery
+starts after five minutes, backs off to ten, twenty, then thirty minutes, and
+reuses completed matches. It allows at most seven automatic continuations per
+job cycle, also subject to the existing eight-attempt limit per Pacific day.
+A queued or running job whose five-minute lease expires is also recovered.
+No browser needs to remain open. A manual run starts a new recovery cycle,
+subject to the same daily limit and five-minute cooldown.
+
+Admin separates three outcomes:
+- **Still pending:** no completed matching decision yet. It either resumes
+  automatically or, after the retry limit, explicitly remains unfinished and
+  needs a manual retry.
+- **No suitable match found:** a valid search and matching decision completed
+  without a suitable candidate. This is not proof that the recording is absent
+  from the whole catalog. Automatic continuations do not repeat this search;
+  a manual retry can.
+- **Needs attention:** a non-transient error such as denied API access. This
+  is never labeled as a missing song.
 
 Successful matches are reused when the submission and matching configuration
-have not changed. Playlists are created with the successfully matched songs;
-unmatched or failed songs are omitted and listed in Admin. If no songs match,
-the playlist is empty. Once created, playlists stay untouched on retries; add
-any omitted songs directly in the music service.
-The generated playlist order is stable and shared within each side; it cannot
-represent every player's individual in-app listening order. Identical selected
-tracks appear once per playlist. Song rows, duplicate merges, and votes are
-never modified by playlist generation.
+have not changed. Playlists contain the songs matched so far. Recovery appends
+newly matched tracks to the existing linked playlists, reading their contents
+first and skipping IDs already present (including Spotify relinked IDs).
+Tidal also uses its duplicate-skip option. Spotify track POSTs are attempted
+once; a later continuation re-reads contents before sending another write.
+Existing songs are never removed or reordered. Newly recovered tracks are
+appended, so a repaired playlist's order may differ from an uninterrupted run.
+Identical selected tracks appear once per playlist. Song rows, duplicate
+merges, and votes are never modified by playlist generation.
 
 Jobs are locked per service and round. Public admin callers can request only the
-current round, wait five minutes between attempts, and make at most eight
-attempts per service per Pacific day. The worker alone writes job state and
-matches. Both scheduled and manual jobs skip only playlists currently linked in
-`round_playlists`, per service and side. Removing a link from Muzak allows a fresh
-playlist on the next run; old managed-playlist records no longer control creation
-or appear in Admin. Existing linked playlists are never changed. Successful song
-matches remain cached to avoid repeated searches and Gemini requests.
+current round during voting or appreciation, wait five minutes between attempts,
+and make at most eight attempts per service per Pacific day, including automatic
+continuations. The worker alone writes job state and matches. Only current
+`round_playlists` links determine whether to fill an existing playlist or create
+a missing one. Removing a link permits recreation; old managed-playlist records
+do not block it. The connected owner must have permission to edit linked
+playlists; an inaccessible or invalid link is an error requiring attention.
 
 New playlists are linked immediately after creation, before tracks are added.
-If insertion fails, the partial playlist is visible: remove its Muzak link to
-recreate it, or repair it in the music service. Removing a Muzak link does not
-delete the external playlist. If a creation response is lost before the link can
-be saved, a retry can create another playlist; check the provider account after
-an ambiguous creation failure. Spotify creation is never automatically retried.
+An interrupted track write can recover using that link. A durable
+`creation_pending` marker guards the interval between creation and saving the
+link. If a creation response or link save is lost, automatic recovery stops
+rather than risking a second playlist. Check the provider account and save the
+existing playlist link in Admin before retrying. Removing a Muzak link does not
+delete the external playlist.
+
+Deploy the new migration and worker together with `npm run playlists:deploy`
+when ready to release, then release the Admin UI through the normal frontend
+deployment. The migration leaves historical failures unchanged and does not
+automatically restart old jobs. Manual repair can resume those jobs while their
+round is current. Disabling a service or leaving voting/appreciation prevents
+further recovery runs.
 
 The configuration is in `playlist_automation_settings`, writable only by the
 backend/operator. `candidate_count` accepts 1–10; `concurrency` accepts 1–8.
@@ -239,8 +268,10 @@ a bounded job; it does not expose the secret-protected worker endpoint.
 ### Costs and platform requirements
 
 - **Supabase Free:** expected incremental cost **$0**. The normal schedule invokes
-  two workers per week, roughly nine invocations a month, against 500,000 free
-  monthly invocations. No paid hosting service or always-on process is needed.
+  two initial workers per week, roughly nine invocations a month, plus bounded
+  recovery invocations when needed, against 500,000 free monthly invocations.
+  The minute-by-minute recovery check runs in Postgres and invokes no worker
+  when there is no eligible unfinished job. No paid hosting service or always-on process is needed.
 - **Gemini Free Tier:** expected **$0** within the project's available quota. Free
   limits vary; lower concurrency or use a later manual retry if the quota is
   exhausted. This integration never enables billing or upgrades plans.

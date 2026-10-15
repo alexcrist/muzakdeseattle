@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.39.0'
 import { getLeagueContext } from '../../../src/lib/schedule.js'
 import { buildRoundGroupAssignment, sidesForRound } from '../../../src/lib/groups.js'
 import { listeningOrderFor } from '../../../src/lib/listeningOrder.js'
-import { checked, digest, JobError, mapConcurrent, requiredEnv, safeError } from './http.js'
+import { canRetry, checked, digest, JobError, mapConcurrent, requiredEnv, safeError } from './http.js'
 import { chooseTrack, songFingerprint } from './matching.js'
 import { tidalClient } from './tidal.js'
 import { spotifyClient } from './spotify.js'
@@ -16,6 +16,12 @@ async function runJob(db, job) {
   const matchingDeadline = Date.now() + 90000
   const updateJob = values => checked(db.from('playlist_jobs').update(values)
     .eq('service', service).eq('round_id', job.round_id).eq('run_id', job.run_id))
+
+  const retryState = needed => ({
+    retry_pending: needed && job.retry_count < 7 && job.attempts_today < 8,
+    next_retry_at: needed && job.retry_count < 7 && job.attempts_today < 8
+      ? new Date(Date.now() + Math.min(30, 5 * 2 ** job.retry_count) * 60000).toISOString() : null,
+  })
 
   try {
     const [settings, rounds, config, players, groupRows, songs, previousMatches, linkedPlaylists] = await Promise.all([
@@ -65,18 +71,34 @@ async function runJob(db, job) {
         return hostname === `${service}.com` || hostname.endsWith(`.${service}.com`)
       } catch { return false }
     }
-    const existingSides = new Set(sideIndexes.filter(groupIndex =>
-      linkedPlaylists.some(row => (row.group_index ?? 0) === groupIndex && isServiceLink(row))))
-    const pendingSongs = songs.filter(song => !existingSides.has(sides.isSplit ? sides.sideByPlayerId[song.player_id] : 0))
-    await updateJob({ total_songs: pendingSongs.length, matched_songs: 0, message: `Finding the submitted recordings on ${serviceName}.` })
+    await updateJob({ total_songs: songs.length, message: `Finding the submitted recordings on ${serviceName}.` })
     const music = service === 'tidal' ? tidalClient(db, deadline) : spotifyClient(db, deadline)
     const cached = new Map(previousMatches.map(match => [match.song_id, match]))
-    const matches = await mapConcurrent(pendingSongs, service === 'tidal' ? Math.min(config.concurrency, 2) : config.concurrency, async song => {
-      const fingerprint = await songFingerprint(song, config.model, config.candidate_count)
+    const prepared = await Promise.all(songs.map(async song => ({
+      song, fingerprint: await songFingerprint(song, config.model, config.candidate_count),
+    })))
+    const reusable = ({ song, fingerprint }) => {
       const previous = cached.get(song.id)
-      if (previous?.fingerprint === fingerprint && previous.status === 'matched' && previous.track_id) return previous
+      if (previous?.fingerprint !== fingerprint) return null
+      if (previous.status === 'matched' && previous.track_id) return previous
+      // An automatic continuation only retries unfinished work. A manual run
+      // can search again after a genuine no-match or a corrected setup error.
+      if (job.source === 'resume' && ['unmatched', 'failed'].includes(previous.status)) return previous
+      return null
+    }
+    const waiting = prepared.filter(item => !reusable(item)).map(({ song, fingerprint }) => ({
+      service, song_id: song.id, round_id: job.round_id, fingerprint,
+      status: 'pending', track_id: null, track_label: null,
+      reason: 'Waiting for a completed search.', updated_at: new Date().toISOString(),
+    }))
+    if (waiting.length) await checked(db.from('playlist_song_matches').upsert(waiting, { onConflict: 'service,song_id' }))
+    const matches = await mapConcurrent(prepared, service === 'tidal' ? Math.min(config.concurrency, 2) : config.concurrency, async item => {
+      const previous = reusable(item)
+      if (previous) return previous
+      const { song, fingerprint } = item
       let match
       try {
+        if (Date.now() + 5000 >= matchingDeadline) throw new JobError('The matching window ended before this search could finish.', true)
         const candidates = await music.search(song, config.candidate_count, matchingDeadline)
         const { track, reason } = await chooseTrack(song, candidates, {
           db, model: config.model, round: context.currentRound, serviceName, deadline: matchingDeadline,
@@ -87,7 +109,7 @@ async function runJob(db, job) {
           reason,
         }
       } catch (error) {
-        match = { status: 'failed', track_id: null, track_label: null, reason: safeError(error) }
+        match = { status: canRetry(error) ? 'pending' : 'failed', track_id: null, track_label: null, reason: safeError(error) }
       }
       const result = { ...match, service, song_id: song.id, round_id: job.round_id, fingerprint, updated_at: new Date().toISOString() }
       await checked(db.from('playlist_song_matches').upsert(result, { onConflict: 'service,song_id' }))
@@ -97,45 +119,72 @@ async function runJob(db, job) {
     const bySong = new Map(matches.map(match => [match.song_id, match]))
     const matched = matches.filter(match => match.status === 'matched').length
     await updateJob({ matched_songs: matched, message: 'Assembling public playlists.' })
-    const outcomes = await Promise.allSettled(sideIndexes.map(async groupIndex => {
-      if (existingSides.has(groupIndex)) return { skipped: true }
-      const sideSongs = songs.filter(song => !sides.isSplit || sides.sideByPlayerId[song.player_id] === groupIndex)
-      if (!sideSongs.length) throw new JobError('No songs were submitted for this side; no playlist was created.')
-      const ordered = listeningOrderFor(sideSongs, { roundId: job.round_id, playerId: `playlist-side-${groupIndex}` })
-      const trackIds = [...new Set(ordered.map(song => bySong.get(song.id)?.track_id).filter(Boolean))]
-      const name = `Muzak ⋅ ${context.currentRound.theme_name}${sides.isSplit ? ` ⋅ Side ${groupIndex === 0 ? 'A' : 'B'}` : ''}`.slice(0, 250)
-      // Only visible round links decide whether a playlist exists. A fresh job
-      // gets a fresh creation key, so removing a link permits recreation.
-      const playlist = {
-        create_key: crypto.randomUUID(),
-        create_payload: service === 'tidal'
-          ? { data: { type: 'playlists', attributes: { name, accessType: 'PUBLIC' } } }
-          : { name, public: true },
+    const outcomes = []
+    // Keep playlist writes serial, so a creation-in-flight marker is durable
+    // and unambiguous if a worker is terminated before saving its link.
+    for (const groupIndex of sideIndexes) {
+      try {
+        const sideSongs = songs.filter(song => !sides.isSplit || sides.sideByPlayerId[song.player_id] === groupIndex)
+        if (!sideSongs.length) continue
+        const ordered = listeningOrderFor(sideSongs, { roundId: job.round_id, playerId: `playlist-side-${groupIndex}` })
+        const trackIds = [...new Set(ordered.map(song => bySong.get(song.id)?.track_id).filter(Boolean))]
+        const links = linkedPlaylists.filter(row => (row.group_index ?? 0) === groupIndex && isServiceLink(row))
+        if (links.length) {
+          for (const link of links) {
+            const url = new URL(link.url)
+            const validHost = service === 'tidal' ? ['tidal.com', 'www.tidal.com', 'listen.tidal.com'] : ['open.spotify.com']
+            const playlistId = url.pathname.match(/^\/playlist\/([a-zA-Z0-9-]+)\/?$/)?.[1]
+            if (!validHost.includes(url.hostname) || !playlistId) throw new JobError('The saved playlist link is not a supported playlist URL. Update it in Admin.')
+            await music.fillPlaylist(playlistId, trackIds, job.run_id)
+          }
+        } else {
+          // Do not spend the assembly budget creating an empty playlist while
+          // all of this side's matches are still waiting for another pass.
+          if (!trackIds.length && sideSongs.some(song => bySong.get(song.id)?.status === 'pending')) continue
+          if (Date.now() + 10000 >= deadline) throw new JobError('Playlist creation is waiting for a fresh worker window.', true)
+          const name = `Muzak ⋅ ${context.currentRound.theme_name}${sides.isSplit ? ` ⋅ Side ${groupIndex === 0 ? 'A' : 'B'}` : ''}`.slice(0, 250)
+          const playlist = {
+            create_key: crypto.randomUUID(),
+            create_payload: service === 'tidal'
+              ? { data: { type: 'playlists', attributes: { name, accessType: 'PUBLIC' } } }
+              : { name, public: true },
+          }
+          await updateJob({ creation_pending: true })
+          const onCreated = async created => {
+            await checked(db.from('round_playlists').upsert({
+              round_id: job.round_id, group_index: groupIndex, service: serviceName, url: created.url,
+            }, { onConflict: 'round_id,group_index,url' }))
+            await updateJob({ creation_pending: false })
+          }
+          await music.createPlaylist(playlist, trackIds, job.run_id, onCreated)
+        }
+        outcomes.push({ status: 'fulfilled' })
+      } catch (error) {
+        outcomes.push({ status: 'rejected', reason: error })
+        if (!canRetry(error)) break
       }
-      const onCreated = async created => {
-        // Publish the link immediately. A later track-write failure leaves a
-        // visible playlist the admin can remove before retrying, not hidden state.
-        await checked(db.from('round_playlists').upsert({
-          round_id: job.round_id, group_index: groupIndex, service: serviceName, url: created.url,
-        }, { onConflict: 'round_id,group_index,url' }))
-      }
-      const published = await music.createPlaylist(playlist, trackIds, job.run_id, onCreated)
-      return published
-    }))
-    const errors = outcomes.filter(result => result.status === 'rejected').map(result => safeError(result.reason))
-    const publishedCount = outcomes.filter(result => result.status === 'fulfilled' && !result.value.skipped).length
-    const skippedCount = outcomes.filter(result => result.status === 'fulfilled' && result.value.skipped).length
-    const completed = matched === pendingSongs.length && errors.length === 0
+    }
+    const errors = outcomes.filter(result => result.status === 'rejected').map(result => result.reason)
+    const pending = matches.filter(match => match.status === 'pending').length
+    const unmatched = matches.filter(match => match.status === 'unmatched').length
+    const failed = matches.filter(match => match.status === 'failed').length
+    const retry = retryState(!errors.some(error => !canRetry(error)) && (pending > 0 || errors.some(canRetry)))
+    const completed = pending === 0 && failed === 0 && errors.length === 0
     await updateJob({
-      status: completed ? 'completed' : 'partial', finished_at: new Date().toISOString(),
-      message: `${publishedCount} public playlist(s) created. ${skippedCount} existing playlist(s) left untouched. ${matched}/${pendingSongs.length} submissions matched for missing playlists.${errors.length ? ` ${errors.join(' ')}` : ''}${matched < pendingSongs.length ? ' Songs without matches were omitted. Review them in Admin; existing playlists will not be updated on retry.' : ''}`,
+      status: completed ? 'completed' : 'partial', finished_at: new Date().toISOString(), ...retry,
+      message: `${matched}/${songs.length} submissions matched. ${unmatched} searched with no suitable match. ${pending} still pending. ${failed} need attention.${errors.length ? ` ${errors.map(safeError).join(' ')}` : ''}${retry.retry_pending ? ' Unfinished work will resume automatically; recovered tracks will be added to the existing playlists.' : !completed ? ' Automatic recovery is stopped. Review the details and retry from Admin; unfinished searches are not catalog misses.' : ' Playlist assembly is complete.'}`,
     })
+
   } catch (error) {
     try {
-      await updateJob({ status: 'failed', finished_at: new Date().toISOString(), message: safeError(error) })
+      const retry = retryState(canRetry(error))
+      await updateJob({
+        status: 'failed', finished_at: new Date().toISOString(), ...retry,
+        message: `${safeError(error)} ${retry.retry_pending ? 'Unfinished work will resume automatically.' : 'Review the details in Admin; this is not a catalog miss.'}`,
+      })
     } catch {
       // No provider bodies, prompts, or credentials are written to logs.
-      console.error('Could not record playlist job failure; Admin can retry after the five-minute lease expires.')
+      console.error('Could not record playlist job failure; The recovery dispatcher will inspect the expired lease.')
     }
   }
 }

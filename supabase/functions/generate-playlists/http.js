@@ -1,9 +1,18 @@
 export function safeError(error) {
   // Only messages constructed here are safe for the public admin panel.
-  return error instanceof JobError ? error.message : 'The playlist worker encountered an unexpected error. Retry from Admin.'
+  return error instanceof JobError ? error.message : 'The playlist worker encountered an unexpected error. The work is still unfinished.'
 }
 
-export class JobError extends Error {}
+export class JobError extends Error {
+  constructor(message, retryable = false) {
+    super(message)
+    this.retryable = retryable
+  }
+}
+
+export function canRetry(error) {
+  return !(error instanceof JobError) || error.retryable
+}
 
 export function requiredEnv(name) {
   const value = Deno.env.get(name)?.trim()
@@ -16,11 +25,11 @@ export function requiredEnv(name) {
 export function rateLimitedRequest(db, provider) {
   return (label, url, options, deadline, attempts = 3) => jsonRequest(label, url, options, deadline, attempts, async until => {
     const budget = until - Date.now() - 1500
-    if (budget <= 0) throw new JobError(`${label} ran out of time waiting for its request slot.`)
+    if (budget <= 0) throw new JobError(`${label} ran out of time waiting for its request slot.`, true)
     const delay = await checked(db.rpc('playlist_reserve_request', {
       p_provider: provider, p_budget_ms: Math.floor(budget),
     }), 'Could not reserve a provider request slot.')
-    if (delay === null) throw new JobError(`${label} ran out of time waiting for its request slot.`)
+    if (delay === null) throw new JobError(`${label} ran out of time waiting for its request slot.`, true)
     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
   })
 }
@@ -29,20 +38,20 @@ export async function jsonRequest(label, url, options = {}, deadline = Date.now(
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     await beforeAttempt(deadline)
     const remaining = deadline - Date.now()
-    if (remaining < 1500) throw new JobError(`${label} ran out of time. Retry from Admin to continue.`)
+    if (remaining < 1500) throw new JobError(`${label} ran out of time; this work is still pending.`, true)
     let response
     try {
       response = await fetch(url, { ...options, signal: AbortSignal.timeout(Math.min(25000, remaining)) })
     } catch {
       if (attempt + 1 < attempts && deadline - Date.now() > 5000) continue
-      throw new JobError(`${label} could not be reached. Retry from Admin.`)
+      throw new JobError(`${label} could not be reached; this work is still pending.`, true)
     }
     if (response.ok) {
       if (response.status === 204) return null
       try {
         const text = await response.text()
         return text.trim() ? JSON.parse(text) : null
-      } catch { throw new JobError(`${label} returned an unreadable response.`) }
+      } catch { throw new JobError(`${label} returned an unreadable response.`, true) }
     }
 
     if ((response.status === 429 || response.status >= 500) && attempt + 1 < attempts) {
@@ -61,18 +70,18 @@ export async function jsonRequest(label, url, options = {}, deadline = Date.now(
     }
 
     if (response.status === 429) {
-      const error = new JobError(`${label} reached its rate limit. Wait a few minutes, then retry from Admin.`)
+      const error = new JobError(`${label} reached its rate limit; this work is still pending.`, true)
       error.status = 429
       throw error
     }
-    if (response.status === 401 || response.status === 403) throw new JobError(`${label} denied access. Check the API key or reconnect Tidal with playlist permissions.`)
-    throw new JobError(`${label} returned HTTP ${response.status}. Retry from Admin; if it persists, check the integration setup.`)
+    if (response.status === 401 || response.status === 403) throw new JobError(`${label} denied access. Check the API key or reconnect the service with playlist permissions.`)
+    throw new JobError(`${label} returned HTTP ${response.status}. Check the integration setup if this persists.`, response.status >= 500 || response.status === 408)
   }
 }
 
 export async function checked(query, message = 'Could not save playlist progress.') {
   const { data, error } = await query
-  if (error) throw new JobError(message)
+  if (error) throw new JobError(message, true)
   return data
 }
 

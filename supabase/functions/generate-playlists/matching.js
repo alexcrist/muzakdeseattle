@@ -45,14 +45,14 @@ Return a short factual reason suitable for an admin. Omit player identities. The
       }),
     }, deadline)
   const candidate = response?.candidates?.[0]
-  if (candidate?.finishReason !== 'STOP') throw new JobError('Gemini did not finish choosing a track. Retry this song from Admin.')
+  if (candidate?.finishReason !== 'STOP') throw new JobError('Gemini did not finish choosing a track. This song is still pending.', true)
   let choice
   try {
     choice = JSON.parse(candidate.content.parts.filter(part => !part.thought).map(part => part.text || '').join(''))
-  } catch { throw new JobError('Gemini returned an invalid track choice. Retry from Admin.') }
-  if (typeof choice.reason !== 'string' || !('track_id' in choice)) throw new JobError('Gemini returned an incomplete track choice.')
+  } catch { throw new JobError('Gemini returned an invalid track choice. This song is still pending.', true) }
+  if (!choice || typeof choice !== 'object' || typeof choice.reason !== 'string' || !('track_id' in choice)) throw new JobError('Gemini returned an incomplete track choice.', true)
   if (choice.track_id === null) return { track: null, reason: choice.reason.slice(0, 500) }
   const track = candidates.find(candidate => candidate.id === choice.track_id)
-  if (!track) throw new JobError('Gemini chose a track outside the search results. No track was added.')
+  if (!track) throw new JobError('Gemini chose a track outside the search results. No track was added.', true)
   return { track, reason: choice.reason.slice(0, 500) }
 }

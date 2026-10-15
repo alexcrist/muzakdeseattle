@@ -53,7 +53,7 @@ export default function PlaylistAutomation({ settings, rounds }) {
           ))}
         </div>
       )}
-      <p className="muted">Jobs run in the cloud. You can close this page. Songs without matches are omitted and listed below. Existing playlists are left untouched. Retrying creates only missing playlists. Remove a playlist link from Muzak to allow it to be created again.</p>
+      <p className="muted">Jobs run in the cloud. You can close this page. Interrupted searches resume automatically, and recovered songs are added to the existing playlists without duplicates. Completed searches with no suitable match are listed separately. Remove a playlist link from Muzak to allow it to be created again.</p>
     </section>
   )
 }
@@ -87,19 +87,26 @@ function ServicePlaylists({ service, connection, job, matches, playlists, canRun
     }
   }
 
-  const unresolved = matches.filter(match => match.status !== 'matched')
+  const unresolvedGroups = [
+    { status: 'pending', title: 'Still pending', description: job?.retry_pending
+      ? 'These searches have not finished. They will resume automatically.'
+      : 'These searches have not finished. Review the job message and retry; they are not catalog misses.' },
+    { status: 'unmatched', title: 'No suitable match found', description: 'Search completed, but no suitable recording was found in the returned results. This does not prove the song is absent from the service’s catalog.' },
+    { status: 'failed', title: 'Needs attention', description: 'An error prevented matching. These songs have not been classified as unavailable.' },
+  ]
   const published = playlists.filter(playlist => playlist.url)
 
   return (
     <section className="card">
       <div className="section-heading">
         <h3>{service.name}</h3>
-        <span className="soft-tag">{!ready ? 'Setup needed' : expired ? 'Retry available' : STATUS_LABELS[job?.status] || 'Connected'}</span>
+        <span className="soft-tag">{!ready ? 'Setup needed' : job?.retry_pending && (!active || expired) ? 'Recovery scheduled' : expired ? 'Retry available' : job?.status === 'completed' && matches.some(match => match.status === 'unmatched') ? 'Ready · some songs not found' : STATUS_LABELS[job?.status] || 'Connected'}</span>
       </div>
       {!ready && <p className="muted">{!connection?.enabled ? 'API keys need to be configured.' : 'The playlist owner needs to connect their account.'}</p>}
       {job?.message && <p role="status">Last run: {job.message}</p>}
       {active && !expired && <p className="muted" role="status">{job.status === 'queued' ? 'Waiting for the worker…' : 'Matching songs and assembling playlists…'}</p>}
-      {expired && <p className="error-msg">The job stopped responding. Retry to create missing playlists. Existing playlists will be left untouched.</p>}
+      {job?.retry_pending && job.next_retry_at && (!active || expired) && <p className="muted" role="status">Automatic recovery is scheduled for {new Date(job.next_retry_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} or shortly afterward.</p>}
+      {expired && !job?.retry_pending && <p className="error-msg">The job stopped responding. Retry to finish matching and add missing songs to the existing playlists.</p>}
       {published.length > 0 && (
         <div className="playlist-links">
           {published.map(playlist => (
@@ -109,19 +116,23 @@ function ServicePlaylists({ service, connection, job, matches, playlists, canRun
           ))}
         </div>
       )}
-      {unresolved.length > 0 && (
-        <div>
-          <h4>Songs needing attention from previous matching</h4>
-          <ul>
-            {unresolved.map(match => (
-              <li key={match.song_id}>
-                <strong>{match.songs?.artist} — {match.songs?.title}</strong>
-                <p>{match.reason}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {unresolvedGroups.map(group => {
+        const entries = matches.filter(match => match.status === group.status)
+        return entries.length > 0 && (
+          <div key={group.status}>
+            <h4>{group.title}</h4>
+            <p className="muted">{group.description}</p>
+            <ul>
+              {entries.map(match => (
+                <li key={match.song_id}>
+                  <strong>{match.songs?.artist} — {match.songs?.title}</strong>
+                  <p>{match.reason}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
       {matches.some(match => match.status === 'matched') && (
         <details>
           <summary>Matched recordings</summary>
@@ -138,7 +149,7 @@ function ServicePlaylists({ service, connection, job, matches, playlists, canRun
         </details>
       )}
       <button type="button" className="btn btn-secondary" disabled={!ready || !canRun || starting || (active && !expired)} onClick={start}>
-        {starting ? 'Starting…' : active && !expired ? 'Running…' : job ? `Create missing ${service.name} playlists` : `Create ${service.name} playlists`}
+        {starting ? 'Starting…' : active && !expired ? 'Running…' : job ? `Retry / repair ${service.name} playlists` : `Create ${service.name} playlists`}
       </button>
       {message && <p className="error-msg" role="alert">{message}</p>}
     </section>

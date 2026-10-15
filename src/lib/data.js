@@ -368,7 +368,7 @@ export async function fetchPlaylistAutomationData(roundId) {
   const [connections, jobs, matches, playlists] = await Promise.all([
     supabase.from('playlist_automation_settings').select('service, enabled, connected'),
     roundId ? supabase.from('playlist_jobs')
-      .select('service, round_id, run_id, status, started_at, finished_at, message, total_songs, matched_songs')
+      .select('service, round_id, run_id, status, started_at, finished_at, message, total_songs, matched_songs, retry_pending, next_retry_at')
       .eq('round_id', roundId) : Promise.resolve({ data: [] }),
     roundId ? supabase.from('playlist_song_matches')
       .select('service, song_id, status, track_id, track_label, reason, songs(title, artist)')

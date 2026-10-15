@@ -62,14 +62,14 @@ export function tidalClient(db, deadline) {
     }, until)
     if (!catalog) return send()
     const pending = catalogQueue.then(async () => {
-      if (catalogRateLimited) throw new JobError('Tidal search is paused after a rate limit. This song was omitted; existing playlists are not updated on retry.')
-      if (Date.now() + 1500 >= until) throw new JobError('Tidal search ran out of time. This song was omitted; existing playlists are not updated on retry.')
+      if (catalogRateLimited) throw new JobError('Tidal search is paused after a rate limit. This song is still pending.', true)
+      if (Date.now() + 1500 >= until) throw new JobError('Tidal search ran out of time. This song is still pending.', true)
       try {
         return await send()
       } catch (error) {
         if (error.status === 429) {
           catalogRateLimited = true
-          throw new JobError('Tidal reached its rate limit. This song was omitted; add it directly in Tidal after the limit clears. Existing playlists are not updated on retry.')
+          throw new JobError('Tidal reached its rate limit. This song is still pending.', true)
         }
         throw error
       }
@@ -81,12 +81,17 @@ export function tidalClient(db, deadline) {
   async function search(song, count, until) {
     const query = `${song.title} ${song.artist}`.trim().slice(0, 256)
     const searchResult = await request(`/searchResults?${new URLSearchParams({ 'filter[query]': query })}`, { catalog: true, until })
-    const searchId = searchResult?.data?.[0]?.id
+    if (!Array.isArray(searchResult?.data)) throw new JobError('Tidal returned incomplete search results.', true)
+    const searchId = searchResult.data[0]?.id
     if (!searchId) return []
     const found = await request(`/searchResults/${encodeURIComponent(searchId)}/relationships/tracks`, { catalog: true, until })
-    const ids = [...new Set((found?.data || []).filter(row => row.type === 'tracks').map(row => row.id))].slice(0, count)
+    if (!Array.isArray(found?.data)) throw new JobError('Tidal returned incomplete search results.', true)
+    const ids = [...new Set((found.data).filter(row => row.type === 'tracks').map(row => row.id))].slice(0, count)
     if (!ids.length) return []
     const details = await request(`/tracks?${new URLSearchParams({ 'filter[id]': ids.join(','), include: 'artists,albums' })}`, { catalog: true, until })
+    if (!Array.isArray(details?.data) || ids.some(id => !details.data.some(track => track.id === id))) {
+      throw new JobError('Tidal did not return all candidate details; matching is still pending.', true)
+    }
     const included = new Map((details.included || []).map(resource => [`${resource.type}:${resource.id}`, resource]))
     const tracks = new Map((details.data || []).map(resource => [resource.id, resource]))
     // Preserve search relevance order; the /tracks response can use its own order.
@@ -112,7 +117,8 @@ export function tidalClient(db, deadline) {
       if (visited.has(path) || visited.size >= 100) throw new JobError('Tidal playlist pagination could not be completed.')
       visited.add(path)
       const page = await request(path)
-      rows.push(...(page.data || []))
+      if (!Array.isArray(page?.data)) throw new JobError('Tidal returned incomplete playlist contents.', true)
+      rows.push(...page.data)
       const next = page.links?.next
       const href = typeof next === 'string' ? next : next?.href
       path = href ? new URL(href, `${API}/playlists/${encodeURIComponent(playlistId)}/relationships/items`).toString() : null
@@ -120,13 +126,10 @@ export function tidalClient(db, deadline) {
     return rows
   }
 
-  async function createPlaylist(playlist, trackIds, runId, onCreated) {
-    const created = await request('/playlists', { method: 'POST', body: playlist.create_payload, key: playlist.create_key })
-    const playlistId = created?.data?.id
-    if (!playlistId) throw new JobError('Tidal did not return the created playlist ID.')
-    await onCreated({ id: playlistId, url: `https://tidal.com/playlist/${encodeURIComponent(playlistId)}` })
+  async function fillPlaylist(playlistId, trackIds, runId) {
     const path = `/playlists/${encodeURIComponent(playlistId)}`
-    const missing = trackIds
+    const existing = new Set((await items(playlistId)).filter(item => item.type === 'tracks').map(item => item.id))
+    const missing = [...new Set(trackIds)].filter(id => !existing.has(id))
     for (let offset = 0; offset < missing.length; offset += 50) {
       const data = missing.slice(offset, offset + 50).map(id => ({ type: 'tracks', id }))
       await request(`${path}/relationships/items`, {
@@ -134,13 +137,26 @@ export function tidalClient(db, deadline) {
         key: `add-${await digest(JSON.stringify([playlistId, runId, data]))}`,
       })
     }
-
     const [published, finalItems] = await Promise.all([request(path), items(playlistId)])
-    if (published?.data?.attributes?.accessType !== 'PUBLIC') throw new JobError('Tidal did not make the playlist public. Review it directly in Tidal; retries leave existing playlists untouched.')
+    if (published?.data?.attributes?.accessType !== 'PUBLIC') throw new JobError('Tidal playlist is not public. Review its sharing settings in Tidal.')
     const finalIds = new Set(finalItems.filter(item => item.type === 'tracks').map(item => item.id))
-    if (trackIds.some(id => !finalIds.has(id))) throw new JobError('Tidal could not add every matched track. Some recordings may be unavailable in the US.')
+    if (trackIds.some(id => !finalIds.has(id))) throw new JobError('Tidal has not added every matched track yet.', true)
     return { id: playlistId, url: `https://tidal.com/playlist/${encodeURIComponent(playlistId)}` }
   }
 
-  return { search, createPlaylist }
+  async function createPlaylist(playlist, trackIds, runId, onCreated) {
+    let playlistId
+    try {
+      const created = await request('/playlists', { method: 'POST', body: playlist.create_payload, key: playlist.create_key })
+      playlistId = created?.data?.id
+      if (!playlistId) throw new JobError('Tidal did not return the created playlist ID.')
+      await onCreated({ id: playlistId, url: `https://tidal.com/playlist/${encodeURIComponent(playlistId)}` })
+    } catch {
+      // The provider may have created it even if the response/link save failed.
+      throw new JobError('Tidal playlist creation could not be confirmed. Check the account and save its link in Admin before retrying.')
+    }
+    return fillPlaylist(playlistId, trackIds, runId)
+  }
+
+  return { search, createPlaylist, fillPlaylist }
 }

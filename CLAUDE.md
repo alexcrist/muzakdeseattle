@@ -133,12 +133,20 @@ candidates with four concurrent songs on Spotify and at most two on Tidal.
 Tidal catalog calls are serialized with shared retry waits. Every Tidal, Spotify,
 and Gemini request (including retries) reserves a database-backed slot, at most
 one request per second per provider across jobs. Successful matches survive
-manual retries. Both scheduled and manual jobs create only missing playlists;
-only current `round_playlists` links determine which sides are skipped. Removing
-a link permits recreation; old managed-playlist records must not block jobs.
-Existing linked playlists are left untouched. Songs without
-matches are omitted; create the playlist with whatever matches succeeded. Admin has per-service job buttons, progress, links, and unresolved
-song details. `round_playlists` remains the frontend's source of playlist links.
+manual retries. Interrupted matching stays pending; a minute-by-minute cron
+resumes eligible unfinished jobs with backoff, at most seven continuations and
+eight total attempts per service per Pacific day. Completed searches with no
+suitable candidate are unmatched, not pending; authentication/setup errors are
+failed, never catalog misses. Automatic continuations reuse matched and
+unmatched decisions; manual retries may search unmatched songs again.
+Only current `round_playlists` links determine whether to create a playlist or
+fill an existing one. Recovery reads playlist contents and appends missing
+matched tracks without removing or reordering existing songs. Removing a link
+permits recreation; old managed-playlist records must not block jobs. A durable
+creation marker stops automatic retries if creation may have succeeded but its
+link was not saved. Admin separates pending work, completed searches with no
+suitable match, and errors needing attention. `round_playlists` remains the
+frontend's source of playlist links.
 
 API keys stay in Edge Function secrets; OAuth credentials stay in Supabase Vault.
 `.env.tidal.local` is the ignored local provisioning file for both services.
