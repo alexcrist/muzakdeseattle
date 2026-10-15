@@ -38,7 +38,7 @@ async function runJob(db, job) {
     let sides = sidesForRound(groupRows, job.round_id)
     if (!sides.isSplit) {
       const assignments = buildRoundGroupAssignment({
-        roundId: job.round_id, activePlayers: players,
+        roundId: job.round_id, activePlayers: players, rounds,
         priorGroupRows: groupRows.filter(row => row.round_id !== job.round_id),
       })
       if (assignments) {

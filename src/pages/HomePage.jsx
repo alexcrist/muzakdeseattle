@@ -113,6 +113,7 @@ export default function HomePage() {
         const assignments = buildRoundGroupAssignment({
           roundId,
           activePlayers,
+          rounds: data.rounds,
           priorGroupRows: data.roundGroups.filter(row => row.round_id !== roundId),
         })
         if (!assignments) return
@@ -129,7 +130,7 @@ export default function HomePage() {
     return () => {
       cancelled = true
     }
-  }, [dayOffset, loading, currentRound, sides.isSplit, mySide, activePlayers, data.roundGroups, player.id, reloadCore])
+  }, [dayOffset, loading, currentRound, sides.isSplit, mySide, activePlayers, data.rounds, data.roundGroups, player.id, reloadCore])
 
   const roundData = useMemo(() => {
     if (!currentRound) return null
