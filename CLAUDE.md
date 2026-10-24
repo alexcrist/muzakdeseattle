@@ -146,7 +146,9 @@ permits recreation; old managed-playlist records must not block jobs. A durable
 creation marker stops automatic retries if creation may have succeeded but its
 link was not saved. Admin separates pending work, completed searches with no
 suitable match, and errors needing attention. `round_playlists` remains the
-frontend's source of playlist links.
+frontend's source of playlist links. Song cards link straight to the matched
+tracks from `playlist_song_matches` in place of the search fallback; a
+submitted link for that service still wins (`songServiceLinks` in `homeUtils.js`).
 
 API keys stay in Edge Function secrets; OAuth credentials stay in Supabase Vault.
 `.env.tidal.local` is the ignored local provisioning file for both services.

@@ -1,6 +1,6 @@
 import Avatar from '../../components/Avatar.jsx'
 import CommentThread from './CommentThread.jsx'
-import { commentsForEntry, playerName, searchUrl, serviceLabelForUrl } from './homeUtils.js'
+import { commentsForEntry, playerName, songServiceLinks } from './homeUtils.js'
 
 export default function AppreciationSongCard({
   entry,
@@ -16,7 +16,6 @@ export default function AppreciationSongCard({
   submitterNote = entry.submitter_note,
 }) {
   const entryComments = commentsForEntry(comments, entry, commentsBySongId)
-  const linkedService = serviceLabelForUrl(entry.link)
 
   return (
     <article className={`song-card appreciation-song-card revealed ${className}`.trim()}>
@@ -34,9 +33,9 @@ export default function AppreciationSongCard({
               {entry.album && <span>from {entry.album}</span>}
             </p>
             <div className="song-actions song-service-actions appreciation-song-actions">
-              {entry.link && <a href={entry.link} target="_blank" rel="noreferrer">{linkedService}</a>}
-              {linkedService !== 'Spotify' && <a href={searchUrl('spotify', entry)} target="_blank" rel="noreferrer">Spotify</a>}
-              {linkedService !== 'TIDAL' && <a href={searchUrl('tidal', entry)} target="_blank" rel="noreferrer">TIDAL</a>}
+              {songServiceLinks(entry).map(link => (
+                <a href={link.href} target="_blank" rel="noreferrer" key={link.label}>{link.label}</a>
+              ))}
             </div>
           </div>
 

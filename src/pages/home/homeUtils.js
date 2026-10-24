@@ -69,6 +69,30 @@ export function searchUrl(service, song) {
   return `https://www.youtube.com/results?search_query=${query}`
 }
 
+const TRACK_URLS = {
+  spotify: id => `https://open.spotify.com/track/${encodeURIComponent(id)}`,
+  tidal: id => `https://tidal.com/track/${encodeURIComponent(id)}`,
+}
+
+// The submitted link wins for its service, then a track matched during
+// playlist creation, then a search. Any other submitted service stays first.
+export function songServiceLinks(song) {
+  const linkedService = song.link ? serviceLabelForUrl(song.link) : null
+  const matchedUrl = service => {
+    const trackId = (song.track_matches || []).find(match => match.service === service && match.track_id)?.track_id
+    return trackId ? TRACK_URLS[service](trackId) : null
+  }
+  const serviceLink = (service, label) => ({
+    label,
+    href: (linkedService === label && song.link) || matchedUrl(service) || searchUrl(service, song),
+  })
+  return [
+    ...(linkedService && linkedService !== 'Spotify' && linkedService !== 'TIDAL' ? [{ label: linkedService, href: song.link }] : []),
+    serviceLink('spotify', 'Spotify'),
+    serviceLink('tidal', 'TIDAL'),
+  ]
+}
+
 export function copyTextFor(items) {
   return items
     .map((song, index) => {

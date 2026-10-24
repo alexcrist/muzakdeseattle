@@ -6,7 +6,7 @@ import { groupLabel } from '../../lib/groups.js'
 import { listeningOrderFor } from '../../lib/listeningOrder.js'
 import { votePointsByPlayer } from '../../lib/voteProgress.js'
 import CommentThread from './CommentThread.jsx'
-import { copyTextFor, indexCommentLikes, indexCommentsBySongId, searchUrl, serviceLabelForUrl } from './homeUtils.js'
+import { copyTextFor, indexCommentLikes, indexCommentsBySongId, songServiceLinks } from './homeUtils.js'
 import PlaylistPanel from './PlaylistPanel.jsx'
 
 export default function VotingView({
@@ -183,7 +183,6 @@ export default function VotingView({
               const isOwn = !isViewingOther && song.player_id === player.id
               const songComments = commentsBySongId.get(song.id) || []
               const currentVote = draftVotes[song.id] || 0
-              const linkedService = serviceLabelForUrl(song.link)
               return (
                 <article className={`song-card voting-song-card ${isViewingOther ? 'is-no-vote' : ''}`} key={song.id}>
                   <div className="voting-song-header">
@@ -195,9 +194,9 @@ export default function VotingView({
                     </div>
 
                     <div className="song-actions song-service-actions voting-song-actions">
-                      {song.link && <a href={song.link} target="_blank" rel="noreferrer">{linkedService}</a>}
-                      {linkedService !== 'Spotify' && <a href={searchUrl('spotify', song)} target="_blank" rel="noreferrer">Spotify</a>}
-                      {linkedService !== 'TIDAL' && <a href={searchUrl('tidal', song)} target="_blank" rel="noreferrer">TIDAL</a>}
+                      {songServiceLinks(song).map(link => (
+                        <a href={link.href} target="_blank" rel="noreferrer" key={link.label}>{link.label}</a>
+                      ))}
                     </div>
 
                     {song.submitter_note && <p className="note">{song.submitter_note}</p>}
