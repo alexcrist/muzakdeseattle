@@ -26,7 +26,7 @@ function run(command, args) {
 }
 
 async function deploy() {
-  const secrets = [{ name: 'GEMINI_API_KEY', value: requireValue('GEMINI_API_KEY') }]
+  const secrets = [{ name: 'OPENAI_API_KEY', value: requireValue('OPENAI_API_KEY') }]
   const services = ['tidal', 'spotify'].filter(name => env[`${name.toUpperCase()}_CLIENT_ID`] || env[`${name.toUpperCase()}_CLIENT_SECRET`])
   if (!services.length) throw new Error('Add Tidal or Spotify credentials to .env.tidal.local.')
   for (const name of services) {
@@ -46,7 +46,7 @@ async function deploy() {
   // Server-side bundling is part of deployment; no local build or checks run.
   run(join(ROOT, 'node_modules/.bin/supabase'), ['functions', 'deploy', 'generate-playlists', '--project-ref', client.ref, '--use-api'])
   await client.sql(`update public.playlist_automation_settings set enabled = true where service in (${services.map(sqlString).join(',')})`)
-  console.log('Playlist worker deployed. Schedule: Thursday at 12:05 a.m. Pacific.')
+  console.log('Playlist worker deployed. Schedule: Thursday at 12:01 a.m. Pacific (Spotify), then Tidal when Spotify finishes.')
   console.log('Connect each playlist owner with: npm run tidal:connect / npm run spotify:connect')
 }
 

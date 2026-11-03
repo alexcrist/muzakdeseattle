@@ -11,7 +11,7 @@ This is intentionally a toy project. Keep the workflow lightweight:
 - Never perform visual checking. Do not start the dev or preview server, use browser automation, or take screenshots to inspect the UI.
 - Make the requested changes and stop without testing, building, or visually reviewing them.
 - Do not automatically commit or push changes. Leave changes local until the user explicitly asks for a commit or push; permission to commit does not imply permission to push.
-- Batch changes before deploying. Every push to `main` triggers a Netlify deployment, and the monthly deployment allowance is limited. A request to make a change is not permission to push or deploy it.
+- Batch changes before deploying. Each website deploy costs Netlify credits, and the monthly allowance is limited. A request to make a change is not permission to push or deploy it. Pushing to `main` does not deploy anything; deploys are explicit CLI commands (see Deployment).
 
 ## Commands
 
@@ -20,13 +20,24 @@ This is intentionally a toy project. Keep the workflow lightweight:
 - `npm run db:plan` — dry run; reports pending migrations, changes nothing
 - `npm run db:deploy` — apply pending migrations
 - `npm run playlists:deploy` — apply migrations, upload server secrets, deploy the playlist worker
+- `npm run web:deploy` — build locally and publish the website to Netlify production
 - `npm run tidal:connect` / `npm run spotify:connect` — one-time playlist-owner authorization
 
 The `db:*` scripts run `scripts/migrate.mjs`, which applies migrations through the Supabase Management API. It needs a personal access token in `SUPABASE_ACCESS_TOKEN` or `~/.muzak-supabase-token`, and reads the project ref out of the Supabase URL in `.env.local`. `db:link` and `db:push` still drive the Supabase CLI instead; both paths record versions in `supabase_migrations.schema_migrations`, so they stay interchangeable.
 
 ## Deployment
 
-The app is deployed on the existing Netlify site, which builds from this repo. Pushing to `main` deploys; there is no manual upload step. Supabase credentials come from Vite environment variables:
+There are three independent deploy targets. Deploy only the ones a change touches, and only when the user asks:
+
+| Change touches | Command | Cost |
+| --- | --- | --- |
+| `src/`, `public/`, `index.html`, Vite or package config | `npm run web:deploy` | One Netlify production deploy (15 credits) |
+| `supabase/migrations/` only | `npm run db:deploy` | Free |
+| `supabase/functions/generate-playlists/`, shared `src/lib` helpers it imports, or its secrets | `npm run playlists:deploy` (also applies migrations) | Free |
+
+Automatic Git builds are stopped on the Netlify site, so pushing to `main` only stores code. `web:deploy` runs `vite build` locally and publishes `dist/` with the Netlify CLI; that build is part of deploying and is not an exception to the no-verification rule. It publishes the local working tree, committed or not. Apply migrations before deploying website or worker code that depends on them. The playlist worker imports `src/lib/schedule.js`, `groups.js`, and `listeningOrder.js`, so changes there may need both a web and a worker deploy.
+
+Supabase credentials come from Vite environment variables. Because the website is built locally, they are read from `.env.local`, not from the Netlify UI:
 
 - `NEXT_PUBLIC_SUPABASE_URL` or `VITE_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `VITE_SUPABASE_ANON_KEY`
@@ -122,16 +133,16 @@ The schema source of truth is `supabase/migrations/`; `SETUP.md` documents how t
 
 ## Automatic Listening Playlists
 
-Supabase Cron launches `generate-playlists` at Thursday 12:05 a.m. Pacific. Two
+Supabase Cron launches `generate-playlists` for Spotify at Thursday 12:01 a.m. Pacific; a `playlist_jobs` trigger starts Tidal as soon as that run finishes, so Tidal can reuse Spotify's ISRCs. A 12:11 slot is only a fallback if Spotify never reports back. Two
 weekly UTC slots are guarded by Pacific local time, so each connected service
 runs once weekly across daylight saving changes. The worker reuses `schedule.js`
 and `groups.js`; it never advances phases or rebalances existing sides.
 
 Each split round gets separate public Side A and Side B playlists on Tidal and
-Spotify. Search uses title and artist, and Gemini selects from the top five
-candidates with four concurrent songs on Spotify and at most two on Tidal.
+Spotify. Search uses title and artist, and OpenAI `gpt-6.1-terra` (medium reasoning) selects from the top five
+candidates with six concurrent songs per service. A song already matched on the other service is looked up by its saved ISRC instead, skipping search and the model.
 Tidal catalog calls are serialized with shared retry waits. Every Tidal, Spotify,
-and Gemini request (including retries) reserves a database-backed slot, at most
+and OpenAI request (including retries) reserves a database-backed slot, at most
 one request per second per provider across jobs. Successful matches survive
 manual retries. Interrupted matching stays pending; a minute-by-minute cron
 resumes eligible unfinished jobs with backoff, at most seven continuations and

@@ -59,5 +59,5 @@ The schema source of truth is `supabase/migrations/`. Add future schema changes 
 ## Docs
 
 - `CLAUDE.md` — how the league works: scheduling, round sides, voting, and scoring rules.
-- `SETUP.md` — provisioning a Supabase project, migrations, Netlify, and DNS.
+- `SETUP.md` — provisioning a Supabase project, migrations, Netlify, DNS, and how to deploy each part (`web:deploy`, `db:deploy`, `playlists:deploy`).
 - `docs/superpowers/specs/` — point-in-time design specs, kept as history.

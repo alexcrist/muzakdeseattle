@@ -15,7 +15,8 @@
     "playlists:deploy": "node scripts/playlists.mjs deploy",
     "tidal:deploy": "node scripts/playlists.mjs deploy",
     "tidal:connect": "node scripts/playlists.mjs connect tidal",
-    "spotify:connect": "node scripts/playlists.mjs connect spotify"
+    "spotify:connect": "node scripts/playlists.mjs connect spotify",
+    "web:deploy": "vite build && netlify deploy --prod --no-build --dir=dist"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
+    "netlify-cli": "^27.16.2",
     "supabase": "^2.108.0",
     "vite": "^5.0.0"
   }

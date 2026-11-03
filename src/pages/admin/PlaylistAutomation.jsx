@@ -32,7 +32,7 @@ export default function PlaylistAutomation({ settings, rounds }) {
         <h2>Listening playlists</h2>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => reload()}>Refresh status</button>
       </div>
-      <p>Every Thursday at 12:05 a.m. Pacific, create public playlists for Side A and Side B on each connected service.</p>
+      <p>Every Thursday just after midnight Pacific (Spotify at 12:01 a.m., then TIDAL as soon as Spotify finishes), create public playlists for Side A and Side B on each connected service.</p>
       <p className="muted">Each playlist contains only that side’s songs. Small rounds without sides get one playlist per service.</p>
       {context.currentRound ? <p>Current round: <strong>{context.currentRound.theme_name}</strong></p> : <p className="muted">No current round is queued.</p>}
       {!canRun && roundId && <p className="muted">Manual runs open when submissions close.</p>}

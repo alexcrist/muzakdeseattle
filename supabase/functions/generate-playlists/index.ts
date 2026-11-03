@@ -3,7 +3,7 @@ import { getLeagueContext } from '../../../src/lib/schedule.js'
 import { buildRoundGroupAssignment, sidesForRound } from '../../../src/lib/groups.js'
 import { listeningOrderFor } from '../../../src/lib/listeningOrder.js'
 import { canRetry, checked, digest, JobError, mapConcurrent, requiredEnv, safeError } from './http.js'
-import { chooseTrack, songFingerprint } from './matching.js'
+import { chooseTrack, pickSameRecording, songFingerprint } from './matching.js'
 import { tidalClient } from './tidal.js'
 import { spotifyClient } from './spotify.js'
 
@@ -24,7 +24,9 @@ async function runJob(db, job) {
   })
 
   try {
-    const [settings, rounds, config, players, groupRows, songs, previousMatches, linkedPlaylists] = await Promise.all([
+    const otherService = service === 'tidal' ? 'spotify' : 'tidal'
+    const otherName = service === 'tidal' ? 'Spotify' : 'TIDAL'
+    const [settings, rounds, config, players, groupRows, songs, previousMatches, linkedPlaylists, otherMatches] = await Promise.all([
       checked(db.from('league_settings').select('*').eq('id', 1).single()),
       checked(db.from('rounds').select('*').order('queue_position')),
       checked(db.from('playlist_automation_settings').select('*').eq('service', service).single()),
@@ -33,7 +35,10 @@ async function runJob(db, job) {
       checked(db.from('songs').select('id, round_id, player_id, title, artist, album, link, submitter_note').eq('round_id', job.round_id)),
       checked(db.from('playlist_song_matches').select('*').eq('service', service).eq('round_id', job.round_id)),
       checked(db.from('round_playlists').select('group_index, service, url').eq('round_id', job.round_id)),
+      checked(db.from('playlist_song_matches').select('song_id, isrc').eq('service', otherService).eq('round_id', job.round_id)
+        .eq('status', 'matched').not('isrc', 'is', null)),
     ])
+    const otherIsrc = new Map(otherMatches.map(match => [match.song_id, match.isrc]))
     if (!config.enabled || !config.connected) throw new JobError(`${serviceName} automation is not connected and enabled.`)
     const context = getLeagueContext(rounds, settings)
     if (context.currentRound?.id !== job.round_id || !['voting', 'appreciation'].includes(context.phase)) {
@@ -92,24 +97,35 @@ async function runJob(db, job) {
       reason: 'Waiting for a completed search.', updated_at: new Date().toISOString(),
     }))
     if (waiting.length) await checked(db.from('playlist_song_matches').upsert(waiting, { onConflict: 'service,song_id' }))
-    const matches = await mapConcurrent(prepared, service === 'tidal' ? Math.min(config.concurrency, 2) : config.concurrency, async item => {
+    // Tidal catalog calls are serialized in tidal.js regardless, so this only
+    // overlaps the slower model calls.
+    const matches = await mapConcurrent(prepared, config.concurrency, async item => {
       const previous = reusable(item)
       if (previous) return previous
       const { song, fingerprint } = item
       let match
       try {
         if (Date.now() + 5000 >= matchingDeadline) throw new JobError('The matching window ended before this search could finish.', true)
-        const candidates = await music.search(song, config.candidate_count, matchingDeadline)
-        const { track, reason } = await chooseTrack(song, candidates, {
-          db, model: config.model, round: context.currentRound, serviceName, deadline: matchingDeadline,
-        })
+        let choice = null
+        const isrc = otherIsrc.get(song.id)
+        if (isrc) {
+          const track = pickSameRecording(song, await music.findByIsrc(isrc, matchingDeadline), isrc)
+          if (track) choice = { track, reason: `Same recording (ISRC ${isrc}) as the ${otherName} match.` }
+        }
+        if (!choice) {
+          const candidates = await music.search(song, config.candidate_count, matchingDeadline)
+          choice = await chooseTrack(song, candidates, {
+            db, model: config.model, round: context.currentRound, serviceName, deadline: matchingDeadline,
+          })
+        }
+        const { track, reason } = choice
         match = {
-          status: track ? 'matched' : 'unmatched', track_id: track?.id || null,
+          status: track ? 'matched' : 'unmatched', track_id: track?.id || null, isrc: track?.isrc || null,
           track_label: track ? `${track.artists.join(', ')} — ${track.title}${track.version ? ` (${track.version})` : ''}` : null,
           reason,
         }
       } catch (error) {
-        match = { status: canRetry(error) ? 'pending' : 'failed', track_id: null, track_label: null, reason: safeError(error) }
+        match = { status: canRetry(error) ? 'pending' : 'failed', track_id: null, isrc: null, track_label: null, reason: safeError(error) }
       }
       const result = { ...match, service, song_id: song.id, round_id: job.round_id, fingerprint, updated_at: new Date().toISOString() }
       await checked(db.from('playlist_song_matches').upsert(result, { onConflict: 'service,song_id' }))

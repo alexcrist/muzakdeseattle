@@ -2,6 +2,13 @@ import { checked, JobError, rateLimitedRequest, requiredEnv } from './http.js'
 
 const API = 'https://api.spotify.com/v1'
 
+const toCandidates = items => items.filter(track => track && track.is_playable !== false && !track.restrictions).map(track => ({
+  id: track.id, title: track.name, version: '',
+  artists: track.artists.map(artist => artist.name),
+  albums: [{ title: track.album.name, releaseDate: track.album.release_date }],
+  duration: `${track.duration_ms}ms`, explicit: track.explicit, isrc: track.external_ids?.isrc || null,
+}))
+
 export function spotifyClient(db, deadline) {
   const jsonRequest = rateLimitedRequest(db, 'spotify')
   let tokenPromise
@@ -43,12 +50,16 @@ export function spotifyClient(db, deadline) {
       q: `${song.title} ${song.artist}`.trim().slice(0, 256), type: 'track', market: 'US', limit: String(Math.min(count, 10)),
     })}`, { until })
     if (!Array.isArray(result?.tracks?.items)) throw new JobError('Spotify returned incomplete search results.', true)
-    return result.tracks.items.filter(track => track && track.is_playable !== false && !track.restrictions).map(track => ({
-      id: track.id, title: track.name, version: '',
-      artists: track.artists.map(artist => artist.name),
-      albums: [{ title: track.album.name, releaseDate: track.album.release_date }],
-      duration: `${track.duration_ms}ms`, explicit: track.explicit, isrc: track.external_ids?.isrc || null,
-    }))
+    return toCandidates(result.tracks.items)
+  }
+
+  // Spotify releases of one recording, from an ISRC another service matched.
+  async function findByIsrc(isrc, until) {
+    const result = await request(`/search?${new URLSearchParams({
+      q: `isrc:${isrc}`, type: 'track', market: 'US', limit: '10',
+    })}`, { until })
+    if (!Array.isArray(result?.tracks?.items)) throw new JobError('Spotify returned incomplete ISRC results.', true)
+    return toCandidates(result.tracks.items)
   }
 
   async function collect(path, field = 'items') {
@@ -100,5 +111,5 @@ export function spotifyClient(db, deadline) {
     return fillPlaylist(playlistId, trackIds)
   }
 
-  return { search, createPlaylist, fillPlaylist }
+  return { search, findByIsrc, createPlaylist, fillPlaylist }
 }

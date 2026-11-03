@@ -4,11 +4,24 @@ const API = 'https://openapi.tidal.com/v2'
 const TOKEN_URL = 'https://auth.tidal.com/v1/oauth2/token'
 const COUNTRY = 'US'
 
+const resourceMap = resources => new Map((resources || []).map(resource => [`${resource.type}:${resource.id}`, resource]))
+
+function toCandidate(resource, included) {
+  const attributes = resource.attributes || {}
+  const related = name => (resource.relationships?.[name]?.data || []).map(link => included.get(`${link.type}:${link.id}`)).filter(Boolean)
+  return {
+    id: resource.id, title: attributes.title || '', version: attributes.version || '',
+    artists: related('artists').map(artist => artist.attributes?.name || ''),
+    albums: related('albums').map(album => ({ title: album.attributes?.title || '', releaseDate: album.attributes?.releaseDate || null })),
+    duration: attributes.duration, explicit: attributes.explicit, isrc: attributes.isrc,
+  }
+}
+
 export function tidalClient(db, deadline) {
   const jsonRequest = rateLimitedRequest(db, 'tidal')
   let catalogTokenPromise
   // Catalog calls share one queue, including retry waits. Matching can still
-  // overlap Gemini calls without sending bursts to Tidal.
+  // overlap OpenAI calls without sending bursts to Tidal.
   let catalogQueue = Promise.resolve()
   let catalogRateLimited = false
   let userTokenPromise
@@ -80,33 +93,32 @@ export function tidalClient(db, deadline) {
 
   async function search(song, count, until) {
     const query = `${song.title} ${song.artist}`.trim().slice(0, 256)
-    const searchResult = await request(`/searchResults?${new URLSearchParams({ 'filter[query]': query })}`, { catalog: true, until })
-    if (!Array.isArray(searchResult?.data)) throw new JobError('Tidal returned incomplete search results.', true)
-    const searchId = searchResult.data[0]?.id
-    if (!searchId) return []
-    const found = await request(`/searchResults/${encodeURIComponent(searchId)}/relationships/tracks`, { catalog: true, until })
-    if (!Array.isArray(found?.data)) throw new JobError('Tidal returned incomplete search results.', true)
-    const ids = [...new Set((found.data).filter(row => row.type === 'tracks').map(row => row.id))].slice(0, count)
+    // One request: the search result plus its tracks and their artists and
+    // albums. This used to take three serialized catalog calls per song.
+    const result = await request(`/searchResults?${new URLSearchParams({
+      'filter[query]': query, include: 'tracks.artists,tracks.albums',
+    })}`, { catalog: true, until })
+    if (!Array.isArray(result?.data)) throw new JobError('Tidal returned incomplete search results.', true)
+    const searchResult = result.data[0]
+    if (!searchResult) return []
+    const order = searchResult.relationships?.tracks?.data
+    if (!Array.isArray(order)) throw new JobError('Tidal returned incomplete search results.', true)
+    const ids = [...new Set(order.filter(row => row.type === 'tracks').map(row => row.id))].slice(0, count)
     if (!ids.length) return []
-    const details = await request(`/tracks?${new URLSearchParams({ 'filter[id]': ids.join(','), include: 'artists,albums' })}`, { catalog: true, until })
-    if (!Array.isArray(details?.data) || ids.some(id => !details.data.some(track => track.id === id))) {
+    const included = resourceMap(result.included)
+    if (ids.some(id => !included.has(`tracks:${id}`))) {
       throw new JobError('Tidal did not return all candidate details; matching is still pending.', true)
     }
-    const included = new Map((details.included || []).map(resource => [`${resource.type}:${resource.id}`, resource]))
-    const tracks = new Map((details.data || []).map(resource => [resource.id, resource]))
-    // Preserve search relevance order; the /tracks response can use its own order.
-    return ids.flatMap(id => {
-      const resource = tracks.get(id)
-      if (!resource) return []
-      const attributes = resource.attributes || {}
-      const related = name => (resource.relationships?.[name]?.data || []).map(link => included.get(`${link.type}:${link.id}`)).filter(Boolean)
-      return [{
-        id, title: attributes.title || '', version: attributes.version || '',
-        artists: related('artists').map(artist => artist.attributes?.name || ''),
-        albums: related('albums').map(album => ({ title: album.attributes?.title || '', releaseDate: album.attributes?.releaseDate || null })),
-        duration: attributes.duration, explicit: attributes.explicit, isrc: attributes.isrc,
-      }]
-    })
+    // Included resources arrive in their own order; the relationship list holds relevance order.
+    return ids.map(id => toCandidate(included.get(`tracks:${id}`), included))
+  }
+
+  // Every Tidal release of one recording, from an ISRC another service matched.
+  async function findByIsrc(isrc, until) {
+    const result = await request(`/tracks?${new URLSearchParams({ 'filter[isrc]': isrc, include: 'artists,albums' })}`, { catalog: true, until })
+    if (!Array.isArray(result?.data)) throw new JobError('Tidal returned incomplete ISRC results.', true)
+    const included = resourceMap(result.included)
+    return result.data.filter(resource => resource.type === 'tracks').map(resource => toCandidate(resource, included))
   }
 
   async function items(playlistId) {
@@ -158,5 +170,5 @@ export function tidalClient(db, deadline) {
     return fillPlaylist(playlistId, trackIds, runId)
   }
 
-  return { search, createPlaylist, fillPlaylist }
+  return { search, findByIsrc, createPlaylist, fillPlaylist }
 }

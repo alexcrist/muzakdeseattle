@@ -57,18 +57,50 @@ In Netlify:
 1. Open **Site configuration -> Environment variables**.
 2. Add `VITE_SUPABASE_URL`.
 3. Add `VITE_SUPABASE_ANON_KEY`.
-4. Redeploy the site.
+4. Not needed for CLI deploys, which read `.env.local`; keep these in sync only if Git builds are ever re-enabled.
 
 The app still accepts `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for old environments, but new configuration should use the `VITE_` names.
 
 ## 3. Build And Deploy
 
-Netlify builds from this repo, so pushing to `main` deploys. There is no manual upload step.
+Nothing deploys on push. Each part of the app has its own command, and each
+runs from this repo on your machine:
 
-Follow the toy-project workflow in `CLAUDE.md`: do not run a local build, tests,
-linting, type checks, or visual checks. Netlify performs the deployment build.
+| What | Command | When |
+| --- | --- | --- |
+| Website (Netlify) | `npm run web:deploy` | After changes to `src/`, `public/`, `index.html`, or Vite/package config. Each run is one production deploy, 15 Netlify credits, so batch changes. |
+| Database migrations | `npm run db:deploy` | After adding files to `supabase/migrations/`. Run `npm run db:plan` first to see what is pending. |
+| Playlist worker | `npm run playlists:deploy` | After changes to `supabase/functions/generate-playlists/`, the `src/lib` helpers it imports (`schedule.js`, `groups.js`, `listeningOrder.js`), or its secrets in `.env.tidal.local`. Also applies pending migrations. |
 
-Netlify reads its build settings from `netlify.toml`. Environment variables set in the Netlify UI are baked in at build time, so changing one requires a redeploy to take effect.
+Order matters when a change spans targets: apply migrations first, then the
+worker, then the website.
+
+### Website deploys
+
+`npm run web:deploy` runs `vite build` locally and publishes `dist/` to the
+production site with the Netlify CLI (installed as a dev dependency). It
+publishes your working tree as it is, committed or not, so commit first if you
+want the deploy to match `main`.
+
+Because the build runs locally, the Supabase URL and key are read from
+`.env.local`; the Netlify UI environment variables are not used. `netlify.toml`
+still supplies the SPA redirect.
+
+One-time setup on a new machine:
+
+```bash
+npx netlify login   # opens a browser to authorize the CLI
+npx netlify link    # choose the existing muzakdeseattle site
+```
+
+Automatic Git builds are stopped on the site (**Project configuration → Build &
+deploy → Continuous deployment → Build settings → Stop builds**), so pushes to
+`main` cost nothing. To roll back, publish an earlier deploy from the Netlify
+**Deploys** page; rollbacks cost no credits.
+
+Follow the toy-project workflow in `CLAUDE.md`: do not run tests, linting, type
+checks, or visual checks. The build inside `web:deploy` is part of deploying,
+not a verification step.
 
 ## 4. Connect `muzakdeseattle.com`
 
@@ -116,9 +148,13 @@ A, TIDAL Side B, Spotify Side A, and Spotify Side B. A round below the split
 threshold gets one playlist per service. The frontend keeps using
 `round_playlists`, so links appear in voting, appreciation, and round history.
 
-The weekly job starts Thursday at **12:05 a.m. America/Los_Angeles**. Supabase
-cron uses UTC, so it evaluates `5 7,8 * * 4`; a database guard only launches the
-workers at the slot that is 00:05 Pacific. The other slot is a no-op. This handles
+The weekly job queues Spotify Thursday at **12:01 a.m. America/Los_Angeles**. A
+trigger on `playlist_jobs` queues Tidal as soon as that scheduled Spotify run
+finishes, whatever its outcome, so Tidal can reuse Spotify's matches by ISRC. If
+Spotify cannot be queued, Tidal is queued at 12:01 instead; if Spotify's worker
+never reports back, a 12:11 fallback queues Tidal unless it already ran that
+day. Supabase cron uses UTC, so it evaluates `1,11 7,8 * * 4`; a database guard
+only acts in the Pacific windows. The other UTC hour is a no-op. This handles
 both PST and PDT without a frequent polling cron. There is no scheduled catch-up
 job: use Admin for a missed or failed run. If the weekly phase template changes,
 the Thursday job still runs only after submissions have closed. It skips a
@@ -134,7 +170,7 @@ TIDAL_CLIENT_ID=...
 TIDAL_CLIENT_SECRET=...
 SPOTIFY_CLIENT_ID=...
 SPOTIFY_CLIENT_SECRET=...
-GEMINI_API_KEY=...
+OPENAI_API_KEY=...
 ```
 
 1. **Tidal:** create an app at <https://developer.tidal.com/dashboard>. Register
@@ -147,10 +183,10 @@ GEMINI_API_KEY=...
    Authorize that account, or add the playlist owner's account under Settings →
    Users Management. Ordinary listeners just use the public playlist links and
    do not need to join this developer app's allowlist.
-3. **Gemini:** create an API key at <https://aistudio.google.com/api-keys> in a
-   **Free Tier project without billing enabled**. The default model is
-   `gemini-3.5-flash-lite`. An API key itself does not guarantee free usage if its
-   project has billing enabled; there is no paid-model fallback in this worker.
+3. **OpenAI:** create an API key at <https://platform.openai.com/api-keys> in a
+   project with billing enabled. The default model is `gpt-6.1-terra` with
+   `medium` reasoning effort, called through the Responses API with `store: false`.
+   Set a monthly budget on the project if you want a hard spending ceiling.
 4. Deploy using the existing Supabase personal access token:
 
    ```bash
@@ -183,19 +219,21 @@ desired service. The button is available during the current round's voting and
 appreciation phases. The job continues if you close the page. Status and results
 update through Supabase Realtime, with a Refresh status button as a fallback.
 
-For each submission, the worker searches with **song title and artist**, takes
-the top five candidates, and asks Gemini to choose one or report no suitable
+If the other service already matched a song, the worker looks up that
+recording's ISRC directly and picks the release on the submitted album, else the
+earliest release, with no model call. Otherwise, it searches with **song title and artist**, takes
+the top five candidates, and asks OpenAI to choose one or report no suitable
 match. The prompt includes the submitted album, version hints, note, link, and
 round context. It sends no player IDs, names, scores, comments, or audio. Model
 output is constrained to candidate IDs and checked before use. User-entered
 fields are treated as data, not instructions. Catalog results are not stored;
-only the chosen recording and a short explanation are saved for the round.
+only the chosen recording, its ISRC, and a short explanation are saved for the round.
 
-Spotify processes four songs at a time. Tidal processes at most two, with
-catalog requests serialized. Tidal, Spotify, and Gemini each have a separate
+Both services process six songs at a time. Each Tidal search is a single
+request, and Tidal catalog requests are serialized. Tidal, Spotify, and OpenAI each have a separate
 one-request-per-second limit, shared across jobs through database reservations.
 Every HTTP attempt, including retries and playlist writes, reserves a slot;
-Gemini shares its limit across both services.
+OpenAI shares its limit across both services.
 Tidal retry waits hold the same queue; if rate-limit retries are exhausted,
 remaining catalog searches stop for that job. Services run
 independently, so a Spotify error does not prevent Tidal from finishing. Worker
@@ -272,15 +310,12 @@ a bounded job; it does not expose the secret-protected worker endpoint.
   recovery invocations when needed, against 500,000 free monthly invocations.
   The minute-by-minute recovery check runs in Postgres and invokes no worker
   when there is no eligible unfinished job. No paid hosting service or always-on process is needed.
-- **Gemini Free Tier:** expected **$0** within the project's available quota. Free
-  limits vary; lower concurrency or use a later manual retry if the quota is
-  exhausted. This integration never enables billing or upgrades plans.
-- **If a paid Gemini key is supplied:** at the published Gemini 3.5 Flash-Lite
-  prices of $0.30/million input tokens and $2.50/million output tokens, 20 songs
-  per week across both services, 2,000 input tokens and 1,024 output tokens per
-  song/service, would cost approximately **$0.55/month**, before retries. This is
-  an estimate, not a billing cap. Free-tier prompts may be used to improve
-  Google's products; consult its pricing/data-use terms.
+- **OpenAI (paid):** at the published `gpt-6.1-terra` prices of $1/million input
+  tokens and $5/million output tokens (reasoning tokens bill as output), 16 songs
+  per week across both services, roughly 2,000 input tokens and 1,500 output
+  tokens per song/service, would cost approximately **$1.50/month**, before
+  retries. This is an estimate, not a billing cap; use an OpenAI project budget
+  for that. Requests are sent with `store: false`.
 - **Spotify:** the developer-app owner needs an existing Premium subscription.
   There is no new hosting charge for this integration; if the owner lacks
   Premium, the account requirement must be resolved separately.
@@ -293,7 +328,7 @@ References (consulted October 8, 2026):
 - [Supabase scheduled functions](https://supabase.com/docs/guides/functions/schedule-functions)
 - [Supabase invocation allowances](https://supabase.com/docs/guides/platform/manage-your-usage/edge-function-invocations)
 - [Supabase runtime limits](https://supabase.com/docs/guides/functions/limits)
-- [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing)
+- [OpenAI pricing](https://developers.openai.com/api/docs/pricing) (consulted November 3, 2026)
 - [Tidal API](https://tidal-music.github.io/tidal-api-reference/)
 - [Tidal authorization](https://developer.tidal.com/documentation/api-sdk/api-sdk-authorization)
 - [Tidal developer guidelines](https://developer.tidal.com/documentation/guidelines/guidelines-developer-guidelines)

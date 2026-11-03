@@ -21,7 +21,7 @@ export function requiredEnv(name) {
 }
 
 // Database reservations share each provider's budget across worker invocations,
-// particularly the Gemini calls made by simultaneous Spotify and Tidal jobs.
+// particularly the OpenAI calls made by simultaneous Spotify and Tidal jobs.
 export function rateLimitedRequest(db, provider) {
   return (label, url, options, deadline, attempts = 3) => jsonRequest(label, url, options, deadline, attempts, async until => {
     const budget = until - Date.now() - 1500
@@ -52,6 +52,16 @@ export async function jsonRequest(label, url, options = {}, deadline = Date.now(
         const text = await response.text()
         return text.trim() ? JSON.parse(text) : null
       } catch { throw new JobError(`${label} returned an unreadable response.`, true) }
+    }
+
+    // An exhausted balance also arrives as 429 (OpenAI: insufficient_quota). It is
+    // a setup error, not a rate limit: retrying cannot help, so fail at once.
+    if (response.status === 429) {
+      const body = await response.clone().text().catch(() => '')
+      if (/insufficient_quota|credit_balance_exhausted/.test(body)) {
+        await response.body?.cancel()
+        throw new JobError(`${label} has no remaining credit. Add credits with the provider, then retry from Admin.`)
+      }
     }
 
     if ((response.status === 429 || response.status >= 500) && attempt + 1 < attempts) {
