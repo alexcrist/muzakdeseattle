@@ -86,6 +86,10 @@ Because the build runs locally, the Supabase URL and key are read from
 `.env.local`; the Netlify UI environment variables are not used. `netlify.toml`
 still supplies the SPA redirect.
 
+GIF search also needs `VITE_GIPHY_API_KEY` in `.env.local`. A key stored only
+in `.env.development.local` is excluded from production builds, and a key in
+the Netlify UI is not available to the local build.
+
 One-time setup on a new machine:
 
 ```bash
